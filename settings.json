@@ -1,0 +1,6 @@
+{
+  "alwaysThinkingEnabled": true,
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true
+  }
+}

@@ -1,0 +1,12 @@
+# Deny by default — only track explicitly allowlisted files
+*
+
+# Allowlisted files
+!.gitignore
+!README.md
+!CLAUDE.md
+!CLAUDE_REFERENCE.md
+!settings.json
+!mcp.json.template
+!plans/
+!plans/**
