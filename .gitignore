@@ -10,3 +10,5 @@
 !mcp.json.template
 !plans/
 !plans/**
+!rules/
+!rules/**

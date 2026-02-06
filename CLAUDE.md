@@ -158,6 +158,8 @@ Output:
 
 The Coordinator (main Claude session) delegates to sub-agents, synthesizes, integrates. Never writes code without understanding the full picture first.
 
+> **Note:** Discovery agents (Phase 1) should always read relevant docs/READMEs first and flag any inaccuracies they find during research. Doc fixes found during research are tracked and applied at Completion.
+
 ### Agent Roles
 
 | Role | Tool | Purpose |
@@ -175,6 +177,20 @@ The Coordinator (main Claude session) delegates to sub-agents, synthesizes, inte
 - Report: (1) findings, (2) changes made, (3) potential cross-module impacts
 - Coordinator reviews all output for coherence before proceeding
 - Parallel for independent areas; sequential when dependent
+
+### Background Agent Usage
+
+During Phase 4 (Implementation), proactively use background agents to parallelize work:
+- Pre-research the next module (Explore, background) while implementing the current one
+- Run build verification (build-checker agent, background) after each major change
+- Have architecture-reviewer check cross-module impacts while implementation continues
+- Pre-analyze related systems while current module implementation is in progress
+
+Rules:
+- Analysis/review agents → always background (no write conflicts)
+- Implementation agents → always foreground and sequential (avoid write conflicts on same files)
+- If two implementation agents touch different modules with no shared files, they CAN run in parallel
+- Coordinator must review each background agent's output before acting on it
 
 ### Phase Summary
 
@@ -224,6 +240,29 @@ Spawn parallel Review Agents per module + cross-module agent. Fix issues before 
 **Step 1:** Verify build: `./Scripts/build.sh` — if fails, fix first
 
 **Step 2:** Update plan: mark PLAN_<FEATURE_NAME>.md complete, add status + date, document deviations
+
+### Documentation Maintenance (mandatory on every feature completion)
+
+Before committing, spawn a Review Agent (Explore) to check if any of these need updating:
+- docs/ARCHITECTURE.md — new classes, changed module boundaries, new dependencies, signal flow changes
+- docs/DEVELOPER_GUIDE.md — new patterns, anti-patterns discovered, lessons learned, new gotchas
+- Per-directory READMEs — new files, changed APIs, new integration points
+- .claude/rules/ — new constraints discovered (e.g. thread safety issue found, new convention established)
+- .claude/skills/ — if a common task was done manually that should be a skill, or existing skill steps are now wrong
+- Project CLAUDE.md — if @ imports need updating
+
+The Review Agent should:
+1. Read the git diff of all changes in this feature
+2. Compare against existing docs
+3. Report what's stale or missing
+4. Coordinator updates docs before final commit
+
+If new patterns or anti-patterns were discovered during implementation:
+- Add patterns to DEVELOPER_GUIDE.md with rationale
+- Add anti-patterns with "why this breaks" explanation
+- If it's a hard constraint, add a .claude/rules/ entry scoped to the relevant paths
+
+Documentation changes are committed alongside feature code, not as separate commits.
 
 **Step 3:** Commit:
 ```bash
