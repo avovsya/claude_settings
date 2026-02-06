@@ -233,6 +233,16 @@ Spawn parallel Review Agents per module + cross-module agent. Fix issues before 
 
 ---
 
+## Context Management
+
+- `/compact` when context is getting long but task is mid-phase and you need to continue
+- Fresh session (`claude --continue`) when starting a new phase or after completing a major milestone
+- NEVER `/compact` during Phase 1-2 synthesis — sub-agent findings in coordinator context may be lost
+- If context is full during Phase 4: finish current implementation unit, commit, then fresh session with `claude --continue`
+- Sub-agent heavy workflows fill context fast — monitor and plan compaction points between phases, not during them
+
+---
+
 ## Finish Task
 
 **Triggers:** "finish task", "complete task", "done with this task"
@@ -319,13 +329,18 @@ Each worktree = effectively named by task.
 
 **Step 1:** Find worktree:
 ```bash
+# Derive project paths from main worktree
+MAIN_WORKTREE=$(git worktree list | head -1 | awk '{print $1}')
+PARENT_DIR=$(dirname "$MAIN_WORKTREE")
+PROJECT=$(basename "$MAIN_WORKTREE")
+
 git worktree list | grep -i "<task-name>"
-ls -d /Users/azz/src/Morph-*/ | grep -i "<task-name>"
+ls -d ${PARENT_DIR}/${PROJECT}-*/ | grep -i "<task-name>"
 ```
 
 **Step 2:** Check session files:
 ```bash
-WORKTREE_PATH="/Users/azz/src/Morph-<task-name>"
+WORKTREE_PATH="${PARENT_DIR}/${PROJECT}-<task-name>"
 PROJECT_DIR=$(echo "$WORKTREE_PATH" | sed 's|/|-|g' | sed 's|^-||')
 ls ~/.claude/projects/${PROJECT_DIR}/*.jsonl 2>/dev/null
 ```
@@ -336,8 +351,8 @@ ls ~/.claude/projects/${PROJECT_DIR}/*.jsonl 2>/dev/null
 
 **Step 4b:** No tmux session:
 ```bash
-tmux new-session -d -s <session-name> -c /Users/azz/src/Morph-<task-name>
-tmux split-window -t <session-name> -v -p 30 -c /Users/azz/src/Morph-<task-name>
+tmux new-session -d -s <session-name> -c "$WORKTREE_PATH"
+tmux split-window -t <session-name> -v -p 30 -c "$WORKTREE_PATH"
 tmux send-keys -t <session-name>:.1 "claude --continue" Enter
 osascript <<EOF
 tell application "iTerm2"
