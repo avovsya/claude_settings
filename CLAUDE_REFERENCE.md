@@ -28,8 +28,19 @@ This is a human-readable reference companion to `CLAUDE.md`. Agents should not r
 |------|------|---------|
 | **Coordinator** | Main Claude session | Plans phases, delegates to sub-agents, synthesizes findings, integrates changes. Never writes code blindly. |
 | **Analysis Agent** | Task (subagent_type=Explore) | Deep-reads every file in a scoped area. Reports: public API, internal state, threading model, connections to other modules. |
+| **Domain Expert** | Task (subagent_type=Explore) | Critiques the implementation plan as a specialist. Spawned in Phase 3b based on task scope. See expert types below. |
 | **Implementation Agent** | Task (subagent_type=general-purpose) | Writes code in a focused module following the approved plan. Reports: files changed, lines added/removed, potential cross-module impacts. |
 | **Review Agent** | Task (subagent_type=Explore) | Verifies changes for correctness, consistency with codebase conventions, thread safety, and absence of regressions. |
+
+### Domain Expert Types
+
+| Expert | When to spawn | What they critique |
+|--------|---------------|-------------------|
+| **Software Architect** | ALWAYS | Structural soundness, coupling, patterns, API design, separation of concerns |
+| **Thread Safety Reviewer** | Concurrency / shared state | Races, deadlocks, synchronization strategy, actor isolation |
+| **UX/UI Expert** | UI changes | Layout, interaction patterns, accessibility, visual consistency |
+| **DSP Engineer** | Audio / signal processing | Latency, buffer handling, real-time safety, algorithm correctness |
+| **Musician** | Musical features | Workflow feel, musical correctness, creative utility, musician expectations |
 
 ---
 
@@ -67,7 +78,15 @@ This is a human-readable reference companion to `CLAUDE.md`. Agents should not r
 │  │  └────┬─────┘ └────┬─────┘ └────┬─────┘          │  │
 │  │       └─────────────┼───────────┘                 │  │
 │  │                     ▼                              │  │
-│  │  Phase 3: Plan → USER APPROVAL GATE                │  │
+│  │  Phase 3a: Draft Plan                               │  │
+│  │                     ▼                              │  │
+│  │  Phase 3b: Expert Review Panel                     │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐          │  │
+│  │  │Architect │ │DSP/Thread│ │UX/Music  │ parallel  │  │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘          │  │
+│  │       └─────────────┼───────────┘                 │  │
+│  │                     ▼                              │  │
+│  │  Incorporate feedback → USER APPROVAL GATE         │  │
 │  │                     ▼                              │  │
 │  │  Phase 4: Implementation (sequential, reviewed)    │  │
 │  │  ┌──────────┐    ┌──────────┐                     │  │
@@ -145,7 +164,7 @@ Agent G: "Check for implicit dependencies — notifications, KVO, delegate callb
 
 Coordinator synthesizes into a risk assessment: what could go wrong, what needs careful handling.
 
-### Phase 3: Implementation Plan
+### Phase 3a: Draft Implementation Plan
 
 Coordinator writes `PLAN_<FEATURE_NAME>.md` in `Plans/` using findings from Phase 1 & 2.
 
@@ -158,11 +177,35 @@ Coordinator writes `PLAN_<FEATURE_NAME>.md` in `Plans/` using findings from Phas
 - Thread safety approach (if applicable)
 - Testing strategy
 
-**Optional plan critique:**
+### Phase 3b: Expert Review Panel (MANDATORY)
+
+Before presenting the plan to the user, spawn parallel Domain Expert agents to critique it. The Coordinator selects which experts are relevant based on what the task touches.
+
+**Example prompts:**
 ```
-Agent H: "Review this implementation plan as a <domain expert>. Identify gaps,
-         risks, or better approaches. Be specific and critical."
+Architect: "Review this plan as a software architect. Evaluate: structural
+           soundness, coupling between components, API design, separation of
+           concerns. Are there better patterns? Is anything over-engineered
+           or under-engineered?"
+
+Thread Safety: "Review this plan for concurrency issues. Evaluate: shared state
+               access, synchronization strategy, potential races or deadlocks,
+               actor isolation boundaries. Is the threading model sound?"
+
+UX/UI: "Review this plan as a UX/UI expert. Evaluate: interaction patterns,
+        layout consistency with existing UI, accessibility, animation/feedback,
+        edge cases in user flow."
+
+DSP: "Review this plan as a DSP engineer. Evaluate: real-time safety (no
+      allocations in audio thread?), buffer handling, latency implications,
+      algorithm correctness, numerical stability."
+
+Musician: "Review this plan as a musician and producer. Evaluate: does the
+          workflow feel natural? Is the musical behavior correct? Would this
+          be useful in a real session? Any creative use cases missed?"
 ```
+
+Coordinator incorporates feedback into the plan, then presents the final version to the user.
 
 **This is a hard gate: present plan to user, wait for approval before any code.**
 
@@ -206,3 +249,4 @@ Coordinator synthesizes review findings. If issues found, fix before proceeding 
 | v0 | `CLAUDE.v0.md` | Original flat workflow (Discovery → Planning → Implementation) |
 | v1 | `CLAUDE.v1.md` | Hierarchical 5-phase agent architecture added |
 | v2 | `CLAUDE.md` + `CLAUDE_REFERENCE.md` | Split into agent-optimized ops + human reference |
+| v2.1 | same files | Phase 3 split into 3a (draft) + 3b (mandatory expert review panel) |

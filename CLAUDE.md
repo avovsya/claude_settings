@@ -86,15 +86,23 @@ Spawn targeted Analysis Agents:
 - Implicit dependencies (notifications, KVO, delegates, globals)
 Synthesize into risk assessment.
 
-**Phase 3: Implementation Plan (REQUIRES USER APPROVAL)**
+**Phase 3a: Draft Implementation Plan**
 Create PLAN_<FEATURE_NAME>.md in Plans/:
 - Architecture overview with rationale from research
 - Specific files/classes to modify with what and why
 - Implementation order (dependencies first)
 - Cross-cutting concerns and mitigations
 - Edge cases, error handling, thread safety
-- Optionally: spawn Review Agent to critique plan first
-STOP. Present plan. Do NOT write code until approved.
+
+**Phase 3b: Expert Review Panel (MANDATORY before presenting to user)**
+Spawn PARALLEL Review Agents to critique the draft plan. Select based on what the task touches:
+- Software Architect (ALWAYS): structural soundness, coupling, patterns, API design
+- Thread Safety Reviewer (if concurrency involved): races, deadlocks, synchronization strategy
+- UX/UI Expert (if UI changes): layout, interaction, accessibility, consistency
+- DSP Engineer (if audio/signal processing): latency, buffer handling, real-time safety
+- Musician (if musical features): workflow feel, musical correctness, creative utility
+Incorporate feedback into plan. Then present final plan to user.
+STOP. Do NOT write code until user approves.
 
 **Phase 4: Implementation**
 - Follow plan with todo tracking, dependency order
@@ -156,6 +164,7 @@ The Coordinator (main Claude session) delegates to sub-agents, synthesizes, inte
 |------|------|---------|
 | Coordinator | Main session | Plan, delegate, synthesize, integrate |
 | Analysis Agent | Task (Explore) | Deep-read scoped area, report findings |
+| Domain Expert | Task (Explore) | Critique plan as specialist (architect, DSP, UX, musician) |
 | Implementation Agent | Task (general-purpose) | Write code in focused module, report changes |
 | Review Agent | Task (Explore) | Verify correctness, consistency, side effects |
 
@@ -175,8 +184,17 @@ Spawn parallel Explore agents for: module internals, similar patterns, data flow
 **Phase 2 — Cross-Cutting Analysis**
 Spawn agents for: thread safety, state flow / UI bindings, implicit dependencies. Synthesize into risk assessment.
 
-**Phase 3 — Implementation Plan** (USER APPROVAL GATE)
-Write `PLAN_<FEATURE_NAME>.md` in `Plans/`. Must include: architecture + rationale, files/classes to change, dependency order, cross-cutting mitigations, edge cases, testing. Optionally have Review Agent critique before presenting. **Stop and wait for approval.**
+**Phase 3a — Draft Implementation Plan**
+Write `PLAN_<FEATURE_NAME>.md` in `Plans/`. Must include: architecture + rationale, files/classes to change, dependency order, cross-cutting mitigations, edge cases, testing.
+
+**Phase 3b — Expert Review Panel** (MANDATORY before presenting to user)
+Spawn parallel Review Agents to critique the draft plan. Select reviewers based on task scope:
+- Software Architect (ALWAYS): structural soundness, coupling, patterns, API design
+- Thread Safety Reviewer (if concurrency): races, deadlocks, synchronization
+- UX/UI Expert (if UI): layout, interaction, accessibility, consistency
+- DSP Engineer (if audio/signal): latency, buffers, real-time safety
+- Musician (if musical features): workflow feel, musical correctness, creative utility
+Incorporate feedback, then present final plan. **Stop and wait for user approval.**
 
 **Phase 4 — Implementation**
 Follow plan with todo tracking. Spawn Implementation Agents per area. Coordinator reviews each before proceeding. Build after each major part. User approval between phases.
