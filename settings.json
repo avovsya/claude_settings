@@ -1,4 +1,32 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(./Scripts/build.sh*)",
+      "Bash(./Scripts/deploy.sh*)",
+      "Bash(./Scripts/build_ios.sh*)",
+      "Bash(./Scripts/add_factory_preset.sh*)",
+      "Bash(cp *)",
+      "Bash(cp -r *)",
+      "Bash(kill *)",
+      "Bash(killall *)",
+      "Bash(tmux *)",
+      "Bash(timeout *)",
+      "Bash(osascript *)",
+      "Bash(git worktree *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(git branch *)",
+      "Bash(git stash*)",
+      "Bash(cat /tmp/*)",
+      "Bash(cat /Users/azz/.claude/*)",
+      "mcp__trello__*"
+    ]
+  },
   "enabledPlugins": {
     "clangd-lsp@claude-plugins-official": true
   },
