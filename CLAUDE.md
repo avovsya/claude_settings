@@ -382,3 +382,44 @@ EOF
 4. Offer: "start working on X", "tell me more about X", "shuffle"
 
 **Selection criteria:** interesting technical challenge, visible result, experimental/creative, performance/music-focused, recently brainstormed
+
+---
+
+## Curiosity Lab
+
+**Triggers:** "curio", "curiosity", "I wonder", "research idea"
+
+**Board:** [Curiosity Lab](https://trello.com/b/vqVDt871/curiosity-lab) (ID: `68e392ae2b71aa7ba30e8c92`)
+
+**Lists:**
+- Inbox (`698b63e8e2b5cfadb042f7fc`) — raw ideas
+- Researching (`698b63e9123e9eb3c5eeb7a3`) — actively investigating
+- Findings (`698b63ea963859732572676e`) — results and conclusions
+- Parked (`698b63ead80c1ef2f75ac44d`) — interesting but not now
+
+**What to do:**
+1. Create card in Inbox list with:
+   - Clear title: "Research: <topic summary>"
+   - Description with: core question, specific sub-questions to explore, related concepts, what a good answer looks like
+2. Append user's exact prompt(s) at the bottom of the description under "## Raw Prompts (Original Thinking)" as blockquotes
+3. Report: card link + brief summary of what was captured
+
+**Card description structure:**
+```
+## Core Question
+<distilled version of what user wants to explore>
+
+## Specific Areas to Explore
+<break down into numbered sub-topics with bullet points>
+
+## Related Concepts
+<adjacent fields, frameworks, analogies>
+
+## What Would a Good Answer Look Like?
+<deliverables, format, depth>
+
+## Raw Prompts (Original Thinking)
+> <user's exact words, preserved verbatim>
+```
+
+**If user says "research this curio" or "dig into curio X":** move card to Researching, then do actual research (web search, papers, synthesis) and update the card with findings.
