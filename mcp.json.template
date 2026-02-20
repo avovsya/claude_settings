@@ -6,6 +6,10 @@
         "TRELLO_API_KEY": "<your-trello-api-key>",
         "TRELLO_TOKEN": "<your-trello-token>"
       }
+    },
+    "session-bus": {
+      "command": "node",
+      "args": ["<path-to-repo>/mcp-servers/session-bus/build/index.js"]
     }
   }
 }

@@ -22,3 +22,4 @@
 mcp-servers/**/node_modules/
 mcp-servers/**/build/
 !CHEATSHEET.md
+!COMPLETION_REPORT.md
