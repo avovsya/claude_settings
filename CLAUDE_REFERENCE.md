@@ -12,7 +12,7 @@ This is a human-readable reference companion to `CLAUDE.md`. Agents should not r
 | **Worker Prompt Template** | Template written to `/tmp/<session>-prompt.md` and piped to Claude | Defined in the skill. Contains task context + Recursive Worker Model reference + start trigger |
 | **Feature Workflow Reference** | How the Coordinator (inner session) should behave | Agent roles, sub-agent discipline, phase summaries. The inner session uses this to understand the architecture |
 | **Finish Task** | Wrap-up procedure: build, plan doc, commit, Trello, merge, cleanup | Triggered by user saying "finish task" in any context |
-| **Task Status** | Dashboard: what's in progress, what's stale, what's in backlog | Triggered by "wip" or "task status" |
+| **Task Status** | Dashboard: active tasks with build status, phase progress, stale detection (2h), context health (compaction count) | Triggered by "wip" or "task status" |
 | **Recover Task** | Restore a lost tmux session and resume Claude context | Uses `claude --continue` to pick up where it left off |
 | **"I'm Bored"** | Fun task picker from Trello backlog and ideas | Categorizes by excitement/complexity |
 
