@@ -8,17 +8,20 @@ This is a human-readable reference companion to `CLAUDE.md`. Agents should not r
 
 | Section | Purpose | Notes |
 |---------|---------|-------|
-| **Working on Trello Cards** | Outer session setup: find card, create worktree/branch, update Trello, launch tmux + inner Claude | Steps 1-10 executed by the session where user says "work on X" |
-| **Step 8 (embedded prompt)** | Injected instructions for the inner Claude session | This is the actual text sent to Claude in the worktree. Contains the full 5-phase workflow. Keep compact — it's a payload |
+| **Working on Trello Cards** | Entry point: `/spawn-worker` skill automates the full setup cycle | Invoked by user with card name/URL. See `skills/spawn-worker/SKILL.md` for the 11-step process |
+| **Worker Prompt Template** | Template written to `/tmp/<session>-prompt.md` and piped to Claude | Defined in the skill. Contains task context + Recursive Worker Model reference + start trigger |
 | **Feature Workflow Reference** | How the Coordinator (inner session) should behave | Agent roles, sub-agent discipline, phase summaries. The inner session uses this to understand the architecture |
 | **Finish Task** | Wrap-up procedure: build, plan doc, commit, Trello, merge, cleanup | Triggered by user saying "finish task" in any context |
 | **Task Status** | Dashboard: what's in progress, what's stale, what's in backlog | Triggered by "wip" or "task status" |
 | **Recover Task** | Restore a lost tmux session and resume Claude context | Uses `claude --continue` to pick up where it left off |
 | **"I'm Bored"** | Fun task picker from Trello backlog and ideas | Categorizes by excitement/complexity |
 
-### Why two files?
+### Why multiple files?
 
-`CLAUDE.md` is loaded into the agent's system prompt every session. Every token counts. Diagrams, examples, and explanations waste context window on things agents don't need. This reference file holds the human-readable versions for when you want to understand or modify the workflows.
+- `CLAUDE.md` — loaded into the agent's system prompt every session. Every token counts. Kept lean.
+- `CLAUDE_REFERENCE.md` — human-readable companion with diagrams and examples.
+- `skills/spawn-worker/SKILL.md` — the `/spawn-worker` skill with full step-by-step instructions for the spawn cycle.
+- `rules/` — persistent checklist rules loaded into every session.
 
 ---
 
@@ -49,15 +52,21 @@ This is a human-readable reference companion to `CLAUDE.md`. Agents should not r
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  "work on card X" / "work on next P1"                   │
+│  → /spawn-worker <card-name> [--splits N] [--phase N]   │
 └─────────────────────────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Current Claude Session (Setup)                         │
-│  1. Find card in Trello                                 │
-│  2. Create worktree + branch                            │
-│  3. Update Trello (move to Implementing)                │
-│  4. Start tmux with Claude + prompt                     │
+│  /spawn-worker Skill (Dispatcher Session)               │
+│  1. Find card in Trello (MCP search)                    │
+│  2. Verify card state + git clean                       │
+│  3. Create branch + worktree                            │
+│  4. Copy submodules (if .gitmodules exists)              │
+│  5. Update Trello (move to Implementing)                │
+│  6. Start tmux (2-pane: 70% Claude / 30% shell)         │
+│  7. Write prompt → /tmp/<session>-prompt.md              │
+│  8. Launch: unset CLAUDECODE && cat prompt | claude      │
+│  9. Open iTerm2 tab (auto-attach)                       │
 └─────────────────────────────────────────────────────────┘
                          │
                          ▼

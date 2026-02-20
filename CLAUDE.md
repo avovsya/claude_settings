@@ -8,117 +8,26 @@ Human-readable reference for the human operator: `CHEATSHEET.md`
 
 **Triggers:** "start working on card/task X", "work on X", "work on next P1"
 
-For "next high priority": fetch P1-Critical cards from To Do list, pick first.
-
 The Dispatcher is **L1** — it manages Trello, git, tmux, and spawns workers. It **never writes implementation code**.
 
-### Setup (Current Session)
+Use `/spawn-worker` — it handles the full spawn cycle. See `skills/spawn-worker/SKILL.md` for complete instructions.
 
-**Step 1: Find card**
-- Trello MCP search by name
-- 0 matches → fuzzy search or ask user
-- Multiple matches → list and ask user
-- "next high priority" → P1-Critical from To Do list
-
-**Step 2: Verify card state**
-- Already in "Implementing" with branch → ask: resume or start fresh?
-- In "Done"/"Archived" → warn and confirm
-
-**Step 3: Verify git state**
-```bash
-git status --porcelain
-# Uncommitted changes → warn and stop
+```
+/spawn-worker <card-name-or-url> [--splits N] [--phase N]
+/spawn-worker next                # next P1-Critical from To Do
 ```
 
-**Step 4: Create branch name**
-- Kebab-case from card title: `<type>/<short-description>` (max 50 chars)
-- Types: `feature/`, `fix/`, `refactor/`, `docs/`
-- Too long → suggest shorter, confirm with user
+### Quick Reference (what /spawn-worker does)
 
-**Step 5: Create worktree**
-```bash
-git worktree list | grep <branch-name>
-git branch --list <branch-name>
-git worktree add -b <branch-name> /absolute/path/to/parent/<project>-<branch-name> main
-```
-If project has submodules, copy from main repo (faster than fetch). See project CLAUDE.md for paths.
-
-**Step 6: Update Trello**
-- Move card to "Implementing"
-- Append to description: Branch, Worktree path, Started date
-
-**Step 7: Start tmux**
-
-Sessions stored per-directory at `~/.claude/projects/`. Each worktree = named session. Resume with `claude --continue` or `recover task <name>`.
-
-```bash
-tmux new-session -d -s <session-name> -c /absolute/path/to/worktree
-tmux split-window -t <session-name> -v -p 30 -c /absolute/path/to/worktree
-# Pane 1 (top 70%): Claude Code | Pane 2 (bottom 30%): shell
-```
-
-**Step 8: Write prompt + launch worker**
-
-Write prompt to `/tmp/<task>-prompt.md`. NEVER use inline prompt variables (shell metacharacter mangling).
-
-The prompt must include task details and worker configuration:
-
-```markdown
-## Task: <card-name>
-
-**Branch:** <branch-name>
-**Trello:** <card-url>
-**Card Description:** <summary>
-
-### Requirements
-<task-specific content: what to build, constraints, references to prior work>
-
----
-
-## Worker Configuration
-
-remaining_splits: 2
-start_phase: 1
-
-Follow the **Recursive Worker Model** defined in your global CLAUDE.md.
-At Phase 2 completion, run the Context Capacity Check.
-If this task requires splitting, follow the Self-Replication Protocol.
-
----
-
-**START NOW: Phase 1 (Deep Research). Spawn parallel Analysis Agents.**
-```
-
-Launch:
-```bash
-tmux send-keys -t <session-name>:.1 "unset CLAUDECODE && cat /tmp/<task>-prompt.md | claude" Enter
-```
-
-**Step 9: Open iTerm2 tab**
-```bash
-osascript <<EOF
-tell application "iTerm2"
-    tell current window
-        create tab with default profile
-        tell current session
-            write text "tmux attach -t <session-name>"
-        end tell
-    end tell
-end tell
-EOF
-```
-
-**Step 10: Report**
-```
-Output:
-  Worktree: ../<project>-<branch-name>
-  Trello card -> Implementing
-  Claude Code running in tmux (remaining_splits=2)
-
-  Attach: tmux attach -t <session-name>
-  Panes: Top = Claude Code, Bottom = shell
-  Ctrl-b up/down switch | Ctrl-b d detach | tmux ls list
-```
+1. **Find card** — Trello MCP search (handles 0/multiple matches, "next" for P1)
+2. **Verify state** — Card state (implementing/done?) + git clean check
+3. **Branch + worktree** — `<type>/<kebab-title>`, `git worktree add`
+4. **Submodules** — Auto-detect from `.gitmodules`, copy from main worktree
+5. **Trello** — Move to "Implementing" (or "Researching" for Curiosity Lab), append metadata
+6. **tmux** — 2-pane (70% Claude / 30% shell)
+7. **Worker prompt** — Write to `/tmp/<session>-prompt.md`, launch with `unset CLAUDECODE && cat | claude`
+8. **iTerm2 tab** — Auto-attach (graceful fallback)
+9. **Report** — Worktree path, branch, attach command
 
 ---
 
