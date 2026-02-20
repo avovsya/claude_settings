@@ -214,8 +214,10 @@ If empty or missing, something went wrong — report the error.
 
 **Critical:** Must `unset CLAUDECODE` to prevent parent session environment from leaking into the child worker.
 
+**Critical:** Must use `--dangerously-skip-permissions` to eliminate permission prompts. See [Permission Model](#permission-model) below.
+
 ```bash
-tmux send-keys -t "$SESSION_NAME":.1 "unset CLAUDECODE && cat /tmp/<session-name>-prompt.md | claude" Enter
+tmux send-keys -t "$SESSION_NAME":.1 "unset CLAUDECODE && cat /tmp/<session-name>-prompt.md | claude --dangerously-skip-permissions" Enter
 ```
 
 ---
@@ -257,6 +259,28 @@ Worker spawned for: <card-name>
 
 ---
 
+## Permission Model
+
+Workers are launched with `--dangerously-skip-permissions` to achieve zero permission prompts during autonomous operation.
+
+**What this means:**
+- All permission checks are bypassed — file edits, bash commands, git operations, MCP calls auto-approved
+- The deny list in `~/.claude/settings.json` is also bypassed for the worker session
+- The dispatcher session is NOT affected — it retains standard permission prompts
+
+**Why this is safe:**
+- Workers run in isolated git worktrees on dedicated feature branches
+- Workers cannot affect the main branch without an explicit dispatcher merge
+- Workers don't push to remote (dispatcher handles merges)
+- Claude has built-in safety constraints regardless of permission settings
+- Workers are short-lived (hours, not days)
+
+**To disable for a specific worker:** Remove `--dangerously-skip-permissions` from the launch command above. The worker will revert to standard permission prompts governed by `~/.claude/settings.json`.
+
+**If Claude Code updates break this:** Verify the flag exists via `claude --help` and update the launch command accordingly.
+
+---
+
 ## Worker Prompt Template
 
 This is the exact content written to `/tmp/<session-name>-prompt.md`. Replace all `<placeholders>` with actual values from the steps above.
@@ -292,6 +316,12 @@ You are operating under the Recursive Worker Model:
 Follow the **Recursive Worker Model** defined in your global CLAUDE.md.
 At Phase 2 completion, run the Context Capacity Check.
 If this task requires splitting, follow the Self-Replication Protocol.
+
+## Permission Model
+
+You are running with `--dangerously-skip-permissions` — all permission checks are bypassed.
+This is safe because you are in an isolated worktree on a feature branch.
+Exercise normal judgment — avoid destructive commands, don't modify files outside your worktree.
 
 ---
 
