@@ -1,0 +1,29 @@
+{
+  "name": "mcp-server-session-bus",
+  "version": "1.0.0",
+  "description": "MCP server providing file-based pub/sub messaging between Claude Code sessions",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "mcp-server-session-bus": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "build"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

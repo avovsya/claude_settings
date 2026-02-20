@@ -85,7 +85,8 @@
       "Bash(pnpm *)",
       "Bash(deno *)",
       "mcp__trello__*",
-      "mcp__tmux-control__*"
+      "mcp__tmux-control__*",
+      "mcp__session-bus__*"
     ],
     "deny": [
       "Bash(sudo *)",
