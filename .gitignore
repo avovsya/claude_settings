@@ -16,4 +16,9 @@
 !hooks/**
 !skills/
 !skills/**
+!mcp-servers/
+!mcp-servers/**
+# Ignore build artifacts and deps within mcp-servers
+mcp-servers/**/node_modules/
+mcp-servers/**/build/
 !CHEATSHEET.md
