@@ -25,8 +25,10 @@ mcp-servers/**/node_modules/
 mcp-servers/**/build/
 !coordinator/
 !coordinator/**
-# Ignore build artifacts and deps within coordinator
+# Ignore build artifacts, deps, and runtime data within coordinator
 coordinator/node_modules/
 coordinator/build/
+coordinator/logs/
+coordinator/*.db
 !CHEATSHEET.md
 !COMPLETION_REPORT.md
