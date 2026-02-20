@@ -223,6 +223,7 @@ This is the exact content written to `/tmp/<session-name>-prompt.md`. Replace al
 
 ## Worker Configuration
 
+session_id: <session-name>
 remaining_splits: <remaining_splits>
 start_phase: <start_phase>
 
@@ -241,9 +242,28 @@ If this task requires splitting, follow the Self-Replication Protocol.
 
 Follow the **Recursive Worker Model** defined in your global CLAUDE.md.
 
+## Session Bus Integration
+
+Your session ID is: **<session-name>**
+
+You MUST publish events to the session bus at key milestones using the `session_bus_publish` MCP tool.
+
+**When to publish (mandatory):**
+
+| Event | When | Data |
+|-------|------|------|
+| `session_started` | Immediately on startup | `{}` |
+| `phase_complete` | After completing each phase | `{ "phase": N, "phase_name": "..." }` |
+| `plan_ready` | When plan is ready for review (Phase 3b) | `{ "plan_path": "Plans/PLAN_*.md" }` |
+| `blocked` | When you encounter a blocker | `{ "reason": "..." }` |
+| `build_result` | After build attempts | `{ "passed": true/false, "log_excerpt": "..." }` |
+| `wip_committed` | When you commit a WIP checkpoint | `{ "commit": "<hash>", "phase": N }` |
+
+**First thing you do:** Publish `session_started` event.
+
 ---
 
-**START NOW: Phase <start_phase> (<phase-name>). <start-instruction>**
+**START NOW: Publish `session_started` event, then begin Phase <start_phase> (<phase-name>). <start-instruction>**
 ````
 
 **Phase name mapping:**
