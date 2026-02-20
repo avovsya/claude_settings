@@ -92,7 +92,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hooks/pre-compact-metrics.sh"
+            "command": "/Users/azz/.claude/hooks/pre-compact-metrics.sh"
           }
         ]
       }
@@ -102,7 +102,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hooks/phase-completion-hook.sh",
+            "command": "/Users/azz/.claude/hooks/phase-completion-hook.sh",
             "timeout": 10
           }
         ]
