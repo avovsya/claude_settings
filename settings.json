@@ -73,7 +73,8 @@
       "Bash(patch *)",
       "Bash(test *)",
       "Bash([ *)",
-      "mcp__trello__*"
+      "mcp__trello__*",
+      "mcp__tmux-control__*"
     ],
     "deny": [
       "Bash(sudo *)",
