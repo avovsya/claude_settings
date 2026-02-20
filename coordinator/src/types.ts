@@ -150,6 +150,8 @@ export interface CoordinatorConfig {
   pidPath: string;
   /** Path to coordinator log directory */
   logDir: string;
+  /** Log level: debug|info|warn|error */
+  logLevel: "debug" | "info" | "warn" | "error";
   /** Path to approval decisions directory */
   decisionsDir: string;
   /** Path to spawn requests directory */
@@ -170,6 +172,7 @@ export const DEFAULT_CONFIG: CoordinatorConfig = {
   dbPath: `${process.env.HOME}/.claude/coordinator/coordinator.db`,
   pidPath: `${process.env.HOME}/.claude/coordinator/coordinator.pid`,
   logDir: `${process.env.HOME}/.claude/coordinator/logs`,
+  logLevel: "info",
   decisionsDir: `${process.env.HOME}/.claude/coordinator/decisions`,
   spawnRequestsDir: `${process.env.HOME}/.claude/coordinator/spawn-requests`,
   pollIntervalMs: 30_000,

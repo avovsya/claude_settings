@@ -5,6 +5,7 @@ import { CoordinatorDB } from "./db.js";
 import { SessionBusReader, type BusEvent } from "./session-bus-reader.js";
 import { TmuxClient } from "./tmux-client.js";
 import { GitClient } from "./git-client.js";
+import { TrelloClient } from "./trello-client.js";
 import { Logger } from "./logger.js";
 import { Notifications } from "./notifications.js";
 import { generatePrompt } from "./prompt-generator.js";
@@ -15,6 +16,8 @@ import {
   TERMINAL_WORKER_STATUSES,
   BUS_TERMINAL_STATUSES,
 } from "./types.js";
+
+const CURIOSITY_LAB_BOARD_ID = "68e392ae2b71aa7ba30e8c92";
 
 export class WorkerManager {
   private notifications: Notifications;
@@ -28,6 +31,7 @@ export class WorkerManager {
     private readonly git: GitClient,
     private readonly log: Logger,
     private readonly config: CoordinatorConfig,
+    private readonly trello: TrelloClient | null = null,
   ) {
     this.notifications = new Notifications(log);
   }
@@ -431,19 +435,13 @@ export class WorkerManager {
 
         this.log.info("Processing spawn request", { file, request });
 
-        // For now, require card_name at minimum
-        if (!request.card_name && !request.card_url) {
+        if (!request.card_name && !request.card_url && !request.card_id) {
           this.log.warn("Spawn request missing card identifier", { file });
           await unlink(filePath);
           continue;
         }
 
-        // The actual Trello lookup and spawn will be handled by the
-        // approval/trello integration. For now, log and remove the request.
-        this.log.info("Spawn request acknowledged (Trello integration pending)", {
-          card_name: request.card_name,
-        });
-
+        await this.processSpawnRequest(request);
         await unlink(filePath);
       } catch (err) {
         this.log.error("Failed to process spawn request", {
@@ -455,4 +453,257 @@ export class WorkerManager {
       }
     }
   }
+
+  /**
+   * Process a single spawn request: look up card, generate branch, spawn worker, update Trello.
+   */
+  private async processSpawnRequest(request: SpawnRequest): Promise<void> {
+    if (!this.trello) {
+      this.log.warn(
+        "Trello client not configured (missing TRELLO_API_KEY/TRELLO_TOKEN). " +
+        "Spawn request ignored.",
+        { card_name: request.card_name },
+      );
+      return;
+    }
+
+    // Step 1: Look up the card
+    const card = await this.resolveCard(request);
+    if (!card) return;
+
+    this.log.info("Resolved Trello card", {
+      id: card.id,
+      name: card.name,
+      board: card.idBoard,
+      list: card.idList,
+    });
+
+    // Step 2: Check for existing worker on this card
+    const existing = this.db.getWorkerByTrelloCard(card.id);
+    if (existing) {
+      this.log.warn("Card already has an active worker, skipping spawn", {
+        card_id: card.id,
+        existing_session: existing.session_id,
+      });
+      return;
+    }
+
+    // Step 3: Generate branch name
+    const labelNames = card.labels.map((l) => l.name.toLowerCase());
+    const branch = generateBranchName(card.name, labelNames);
+
+    this.log.info("Generated branch name", { branch, cardName: card.name });
+
+    // Step 4: Spawn the worker
+    const worker = await this.spawnWorker({
+      branch,
+      cardName: card.name,
+      cardDescription: card.desc,
+      labels: card.labels.map((l) => l.name),
+      trelloCardId: card.id,
+      trelloCardUrl: card.url,
+      remainingSplits: request.remaining_splits,
+      startPhase: request.start_phase,
+    });
+
+    // Step 5: Move card to appropriate list
+    await this.moveCardToActiveList(card);
+
+    // Step 6: Append worker session metadata to card description
+    await this.appendSessionMetadata(card, worker, branch, request);
+
+    this.log.info("Spawn request completed", {
+      session_id: worker.session_id,
+      card_name: card.name,
+      branch,
+    });
+  }
+
+  /**
+   * Resolve a spawn request to a Trello card.
+   */
+  private async resolveCard(
+    request: SpawnRequest,
+  ): Promise<import("./trello-client.js").TrelloCard | null> {
+    // By URL
+    if (request.card_url) {
+      const shortLink = TrelloClient.extractCardIdFromUrl(request.card_url);
+      if (shortLink) {
+        try {
+          return await this.trello!.getCard(shortLink);
+        } catch (err) {
+          this.log.error("Failed to fetch card by URL", {
+            url: request.card_url,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        }
+      }
+      this.log.warn("Could not extract card ID from URL", { url: request.card_url });
+      return null;
+    }
+
+    // By ID
+    if (request.card_id) {
+      try {
+        return await this.trello!.getCard(request.card_id);
+      } catch (err) {
+        this.log.error("Failed to fetch card by ID", {
+          id: request.card_id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+    }
+
+    // By name (search)
+    if (request.card_name) {
+      try {
+        const cards = await this.trello!.searchCards(request.card_name);
+        if (cards.length === 0) {
+          this.log.warn("No cards found matching name", { name: request.card_name });
+          return null;
+        }
+        if (cards.length > 1) {
+          this.log.warn("Multiple cards found, using first match", {
+            name: request.card_name,
+            matchCount: cards.length,
+            matches: cards.map((c) => ({ id: c.id, name: c.name })),
+          });
+        }
+        return cards[0];
+      } catch (err) {
+        this.log.error("Failed to search for card", {
+          name: request.card_name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Move a card to "Implementing" or "Researching" (for Curiosity Lab).
+   */
+  private async moveCardToActiveList(
+    card: import("./trello-client.js").TrelloCard,
+  ): Promise<void> {
+    try {
+      const lists = await this.trello!.getBoardLists(card.idBoard);
+      const isCuriosityLab = card.idBoard === CURIOSITY_LAB_BOARD_ID;
+      const targetName = isCuriosityLab ? "Researching" : "Implementing";
+      const targetList = lists.find(
+        (l) => l.name.toLowerCase() === targetName.toLowerCase(),
+      );
+
+      if (!targetList) {
+        this.log.warn("Target list not found on board, skipping card move", {
+          targetName,
+          boardId: card.idBoard,
+          availableLists: lists.map((l) => l.name),
+        });
+        return;
+      }
+
+      if (card.idList === targetList.id) {
+        this.log.debug("Card already in target list", { targetName });
+        return;
+      }
+
+      await this.trello!.moveCard(card.id, targetList.id);
+      this.log.info("Moved card to list", {
+        cardId: card.id,
+        list: targetName,
+      });
+    } catch (err) {
+      this.log.error("Failed to move card", {
+        cardId: card.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Append worker session metadata to a card's description.
+   */
+  private async appendSessionMetadata(
+    card: import("./trello-client.js").TrelloCard,
+    worker: WorkerRow,
+    branch: string,
+    request: SpawnRequest,
+  ): Promise<void> {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const metadata = [
+        "",
+        "---",
+        "**Worker Session**",
+        `- Branch: \`${branch}\``,
+        `- Worktree: \`${worker.worktree}\``,
+        `- Session: \`${worker.session_id}\``,
+        `- Started: ${today}`,
+        `- Splits: ${request.remaining_splits}, Phase: ${request.start_phase}`,
+      ].join("\n");
+
+      const newDesc = card.desc + metadata;
+      await this.trello!.updateCardDescription(card.id, newDesc);
+      this.log.info("Appended session metadata to card", { cardId: card.id });
+    } catch (err) {
+      this.log.error("Failed to update card description", {
+        cardId: card.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+}
+
+// --- Branch name generation ---
+
+/**
+ * Generate a git branch name from a card title and labels.
+ * Follows the same logic as /spawn-worker SKILL.md Step 4.
+ */
+export function generateBranchName(
+  cardTitle: string,
+  labelNames: string[],
+): string {
+  // Determine type prefix from labels
+  let prefix = "feature";
+  for (const label of labelNames) {
+    const lower = label.toLowerCase();
+    if (lower.includes("bug") || lower.includes("fix")) {
+      prefix = "fix";
+      break;
+    }
+    if (lower.includes("refactor")) {
+      prefix = "refactor";
+      break;
+    }
+    if (lower.includes("doc")) {
+      prefix = "docs";
+      break;
+    }
+  }
+
+  // Convert title to kebab-case
+  const kebab = cardTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "") // remove special chars
+    .replace(/\s+/g, "-") // spaces to hyphens
+    .replace(/-+/g, "-") // collapse multiple hyphens
+    .replace(/^-|-$/g, ""); // trim leading/trailing hyphens
+
+  const full = `${prefix}/${kebab}`;
+
+  // Truncate to 50 chars at last complete word boundary
+  if (full.length <= 50) return full;
+
+  const truncated = full.slice(0, 50);
+  const lastHyphen = truncated.lastIndexOf("-");
+  if (lastHyphen > prefix.length + 1) {
+    return truncated.slice(0, lastHyphen);
+  }
+  return truncated;
 }

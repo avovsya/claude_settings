@@ -5,6 +5,7 @@ import { TERMINAL_WORKER_STATUSES, BUS_TERMINAL_STATUSES } from "./types.js";
 import { SessionBusReader } from "./session-bus-reader.js";
 import { TmuxClient } from "./tmux-client.js";
 import { GitClient } from "./git-client.js";
+import { TrelloClient } from "./trello-client.js";
 import { WorkerManager } from "./worker-manager.js";
 import { ApprovalManager } from "./approval-manager.js";
 import { MergeManager } from "./merge-manager.js";
@@ -23,12 +24,24 @@ export class Coordinator {
   private shuttingDown = false;
 
   constructor(private readonly config: CoordinatorConfig) {
-    this.log = new Logger(config.logDir);
+    this.log = new Logger(config.logDir, config.logLevel);
     this.db = new CoordinatorDB(config.dbPath);
     this.bus = new SessionBusReader(config.sessionBusDir);
     this.tmux = new TmuxClient(this.log);
     this.git = new GitClient(config.mainWorktree, this.log);
-    this.workerManager = new WorkerManager(this.db, this.bus, this.tmux, this.git, this.log, config);
+
+    // TrelloClient is optional — gracefully degrade if credentials missing
+    let trello: TrelloClient | null = null;
+    try {
+      trello = new TrelloClient(this.log);
+    } catch {
+      this.log.warn(
+        "Trello client not initialized (TRELLO_API_KEY/TRELLO_TOKEN not set). " +
+        "Spawn requests will be ignored.",
+      );
+    }
+
+    this.workerManager = new WorkerManager(this.db, this.bus, this.tmux, this.git, this.log, config, trello);
     this.approvalManager = new ApprovalManager(this.db, this.tmux, this.log, config);
     this.mergeManager = new MergeManager(this.db, this.git, this.tmux, this.log, config);
   }

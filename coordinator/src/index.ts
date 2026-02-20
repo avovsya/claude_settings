@@ -32,6 +32,15 @@ function parseArgs(argv: string[]): CoordinatorConfig {
       case "--poll-interval":
         config.pollIntervalMs = parseInt(argv[++i] ?? "30000", 10);
         break;
+      case "--log-level": {
+        const level = argv[++i] ?? "info";
+        if (!["debug", "info", "warn", "error"].includes(level)) {
+          console.error(`Invalid log level: ${level}. Must be one of: debug, info, warn, error`);
+          process.exit(1);
+        }
+        config.logLevel = level as "debug" | "info" | "warn" | "error";
+        break;
+      }
       case "--help":
       case "-h":
         usage();
