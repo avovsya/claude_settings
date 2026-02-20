@@ -138,7 +138,7 @@ When a worker decides to split:
 - **Cost efficiency:** Sub-agents don't inherit parent context or share caches — each is an isolated conversation. To reduce redundant token usage:
   - Give each agent a focused, non-overlapping file scope (avoid 5 agents all reading the same files)
   - Include shared context excerpts in the Task prompt rather than having each agent independently read the same docs
-  - Use `model: "haiku"` for Explore/review agents (default); reserve Opus for coordinator reasoning
+  - Use `model: "sonnet"` for Explore/review agents; reserve Opus for coordinator reasoning. **Never use Haiku** — Sonnet is the minimum
 
 ### Background Agent Usage
 
