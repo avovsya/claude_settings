@@ -1,14 +1,16 @@
 # Global Claude Code Recipes
 
-Human-readable reference with diagrams and examples: `CLAUDE_REFERENCE.md`
+Human-readable reference for the human operator: `CHEATSHEET.md`
 
 ---
 
-## Working on Trello Cards
+## Dispatcher: Working on Trello Cards
 
 **Triggers:** "start working on card/task X", "work on X", "work on next P1"
 
 For "next high priority": fetch P1-Critical cards from To Do list, pick first.
+
+The Dispatcher is **L1** — it manages Trello, git, tmux, and spawns workers. It **never writes implementation code**.
 
 ### Setup (Current Session)
 
@@ -39,6 +41,7 @@ git worktree list | grep <branch-name>
 git branch --list <branch-name>
 git worktree add -b <branch-name> /absolute/path/to/parent/<project>-<branch-name> main
 ```
+If project has submodules, copy from main repo (faster than fetch). See project CLAUDE.md for paths.
 
 **Step 6: Update Trello**
 - Move card to "Implementing"
@@ -54,76 +57,41 @@ tmux split-window -t <session-name> -v -p 30 -c /absolute/path/to/worktree
 # Pane 1 (top 70%): Claude Code | Pane 2 (bottom 30%): shell
 ```
 
-**Step 8: Start Claude with initial prompt**
+**Step 8: Write prompt + launch worker**
 
-The prompt MUST include the FULL workflow instructions. Build as follows:
+Write prompt to `/tmp/<task>-prompt.md`. NEVER use inline prompt variables (shell metacharacter mangling).
 
-```bash
-PROMPT='## Task: <card-name>
+The prompt must include task details and worker configuration:
+
+```markdown
+## Task: <card-name>
 
 **Branch:** <branch-name>
-**Card Description:** <card-description-summary>
+**Trello:** <card-url>
+**Card Description:** <summary>
+
+### Requirements
+<task-specific content: what to build, constraints, references to prior work>
 
 ---
 
-## MANDATORY Feature Implementation Workflow (Hierarchical Agent Architecture)
+## Worker Configuration
 
-You are the COORDINATOR. Delegate to sub-agents (Task tool), synthesize, integrate.
-NEVER write code without completing Phases 1-3.
+remaining_splits: 2
+start_phase: 1
 
-**Phase 1: Deep Research (MANDATORY — no code before this completes)**
-Spawn PARALLEL Analysis Agents (Task tool, subagent_type=Explore):
-- Agent A: Read every file in relevant module. Report: public API, state, threading, connections.
-- Agent B: Find all existing similar patterns. Report: conventions, file structure, naming.
-- Agent C: Trace data flow for relevant feature. Report: entry points, transformations, UI bindings.
-- Agent D (if needed): Domain expert review (UX/UI, DSP, architecture, music).
-Synthesize all findings. Answer: "What exists and how does it work?"
-
-**Phase 2: Cross-Cutting Analysis**
-Spawn targeted Analysis Agents:
-- Thread safety implications
-- State flow and UI binding impacts
-- Implicit dependencies (notifications, KVO, delegates, globals)
-Synthesize into risk assessment.
-
-**Phase 3a: Draft Implementation Plan**
-Create PLAN_<FEATURE_NAME>.md in Plans/:
-- Architecture overview with rationale from research
-- Specific files/classes to modify with what and why
-- Implementation order (dependencies first)
-- Cross-cutting concerns and mitigations
-- Edge cases, error handling, thread safety
-
-**Phase 3b: Expert Review Panel (MANDATORY before presenting to user)**
-Spawn PARALLEL Review Agents to critique the draft plan. Select based on what the task touches:
-- Software Architect (ALWAYS): structural soundness, coupling, patterns, API design
-- Thread Safety Reviewer (if concurrency involved): races, deadlocks, synchronization strategy
-- UX/UI Expert (if UI changes): layout, interaction, accessibility, consistency
-- DSP Engineer (if audio/signal processing): latency, buffer handling, real-time safety
-- Musician (if musical features): workflow feel, musical correctness, creative utility
-Incorporate feedback into plan. Then present final plan to user.
-STOP. Do NOT write code until user approves.
-
-**Phase 4: Implementation**
-- Follow plan with todo tracking, dependency order
-- Spawn focused Implementation Agents per major area
-- Coordinator reviews each output before proceeding
-- Build/test after each major part: ./Scripts/build.sh
-- Wait for user approval between major phases
-
-**Phase 5: Verification**
-- Spawn parallel Review Agents per module (correctness, consistency, regressions)
-- Spawn cross-module Review Agent (integration integrity)
-- Fix issues before proceeding
-
-**Completion**
-- On "finish task": verify build, update plan doc, commit, report summary
+Follow the **Recursive Worker Model** defined in your global CLAUDE.md.
+At Phase 2 completion, run the Context Capacity Check.
+If this task requires splitting, follow the Self-Replication Protocol.
 
 ---
 
-**START NOW: Phase 1 (Deep Research). Spawn parallel Analysis Agents.**'
+**START NOW: Phase 1 (Deep Research). Spawn parallel Analysis Agents.**
+```
 
-tmux send-keys -t <session-name>:.1 "claude \"$PROMPT\"" Enter
+Launch:
+```bash
+tmux send-keys -t <session-name>:.1 "unset CLAUDECODE && cat /tmp/<task>-prompt.md | claude" Enter
 ```
 
 **Step 9: Open iTerm2 tab**
@@ -143,89 +111,171 @@ EOF
 **Step 10: Report**
 ```
 Output:
-  ✓ Worktree: ../<project>-<branch-name>
-  ✓ Trello card → Implementing
-  ✓ Claude Code running in tmux
+  Worktree: ../<project>-<branch-name>
+  Trello card -> Implementing
+  Claude Code running in tmux (remaining_splits=2)
 
   Attach: tmux attach -t <session-name>
   Panes: Top = Claude Code, Bottom = shell
-  Ctrl-b ↑/↓ switch | Ctrl-b d detach | tmux ls list
+  Ctrl-b up/down switch | Ctrl-b d detach | tmux ls list
 ```
 
 ---
 
-## Feature Workflow Reference (for Coordinator)
+## Recursive Worker Model
 
-The Coordinator (main Claude session) delegates to sub-agents, synthesizes, integrates. Never writes code without understanding the full picture first.
+Every worker session is the same recursive unit. It receives a task and self-evaluates scope:
 
-> **Note:** Discovery agents (Phase 1) should always read relevant docs/READMEs first and flag any inaccuracies they find during research. Doc fixes found during research are tracked and applied at Completion.
+```
+Worker(task, start_phase, remaining_splits):
+  if remaining_splits == 0:
+    execute_feature_workflow(task, start_phase)     # LEAF -- must complete
+    if context_exhausted: commit_wip(); STOP
 
-### Agent Roles
+  elif fits_in_one_context(research):
+    execute_feature_workflow(task, start_phase)      # Implementer
+
+  else:
+    plan = decompose_into_phases(task)               # Coordinator
+    for phase in plan:
+      spawn Worker(phase, determine_start_phase(phase), remaining_splits - 1)
+      wait_for_human_test()
+```
+
+### Two Modes
+
+| Mode | When | Behavior |
+|------|------|----------|
+| **Implementer** | Task fits in one context, OR `remaining_splits == 0` | Executes Feature Implementation Workflow from `start_phase` |
+| **Coordinator** | Task too large AND `remaining_splits > 0` | Researches, plans, decomposes into sub-phases, spawns child workers |
+
+### Parameters
+
+**`start_phase`** (1-5): Which phase to begin at.
+- **1 (Research):** New feature, unknown territory
+- **2 (Cross-cutting):** Research provided by parent
+- **3 (Planning):** Analysis done, need plan
+- **4 (Implementation):** Plan approved, design doc provided
+- **5 (Verification):** Code done, review pass
+
+**`remaining_splits`** (0-2): How many more times this worker can auto-split.
+- **2** (default from Dispatcher): can split twice
+- **1**: can split once more
+- **0**: LEAF -- must complete or commit WIP and STOP
+
+### Pivot
+
+A worker may start as Implementer, begin Phase 1 research, and realize the task won't fit. If `remaining_splits > 0`, it pivots to Coordinator mode: writes a multi-phase plan, gets human approval, spawns children with `remaining_splits - 1`.
+
+### Parallel Worker Groups
+
+Coordinators may spawn parallel groups with **file ownership boundaries** to prevent conflicts:
+- By device/module category (3 workers for independent subsystems)
+- By concern (design worker + implementation worker)
+- By UI area (board layout + detail sheet)
+
+Specify in each child's prompt: "Do NOT modify <files> (another worker owns these)"
+
+### Context Capacity Check (mandatory at Phase 2 completion)
+
+After completing Phase 2 cross-cutting analysis, STOP and evaluate:
+
+1. **Hard stops** (any one triggers SPLIT):
+   - Context compacted 2+ times already
+   - Plan needs >= 5 implementation phases
+   - Research synthesis > 500 lines (~80K tokens)
+
+2. **Weighted score** (> 0.6 triggers SPLIT):
+   - `0.3 * min(1.0, files_to_modify / 15) + 0.7 * cross_cutting_complexity`
+   - Cross-cutting: count high-complexity concerns (thread safety, state mgmt, UI, etc.)
+
+3. **Tiebreaker:** Self-judgment -- "Can I complete Phases 3-5 in ~120K remaining tokens?"
+
+If `remaining_splits == 0`: skip this check, implement regardless (you are a leaf).
+
+### Self-Replication Protocol (when SPLIT)
+
+When a worker decides to split:
+
+1. **COMMIT** Phase 1-2 checkpoint (`WIP: Phase 2 complete -- splitting to coordinator mode`)
+2. **WRITE** `Plans/FINDINGS_<TASK>.md` -- consolidated research (becomes child context)
+3. **WRITE** `Plans/PLAN_<TASK>.md` -- phased breakdown with file ownership, start_phase per child, dependencies
+4. **WRITE** `/tmp/phase-{N}-prompt.md` for each phase, including:
+   - Task scope and file boundaries
+   - Key findings excerpt
+   - `start_phase: {N}` and `remaining_splits: {current - 1}`
+5. **SIGNAL** human: "Task too large for one context. N phase prompts ready. Approve?"
+6. **WAIT** for human approval
+7. **SPAWN** children via tmux: `unset CLAUDECODE && cat /tmp/phase-N-prompt.md | claude`
+8. **BECOME** Coordinator -- no more implementation code, just reads children's output, writes next prompts
+
+### Agent Roles (within any worker)
 
 | Role | Tool | Purpose |
 |------|------|---------|
 | Coordinator | Main session | Plan, delegate, synthesize, integrate |
 | Analysis Agent | Task (Explore) | Deep-read scoped area, report findings |
-| Domain Expert | Task (Explore) | Critique plan as specialist (architect, DSP, UX, musician) |
-| Implementation Agent | Task (general-purpose) | Write code in focused module, report changes |
-| Review Agent | Task (Explore) | Verify correctness, consistency, side effects |
+| Domain Expert | Task (Explore) | Critique plan as specialist |
+| Implementation Agent | Task (general-purpose) | Write code in focused module |
+| Review Agent | Task (Explore) | Verify correctness, consistency |
 
 ### Sub-Agent Discipline
 
 - One module, one concern per agent
 - Read deeply (every file in scope), not skim
-- Report: (1) findings, (2) changes made, (3) potential cross-module impacts
-- Coordinator reviews all output for coherence before proceeding
+- Report: (1) findings, (2) changes made, (3) cross-module impacts
+- Coordinator reviews all output before proceeding
 - Parallel for independent areas; sequential when dependent
 
 ### Background Agent Usage
 
-During Phase 4 (Implementation), proactively use background agents to parallelize work:
-- Pre-research the next module (Explore, background) while implementing the current one
-- Run build verification (build-checker agent, background) after each major change
-- Have architecture-reviewer check cross-module impacts while implementation continues
-- Pre-analyze related systems while current module implementation is in progress
+During Phase 4, proactively parallelize:
+- Pre-research next module (Explore, background) while implementing current one
+- Build verification (background) after each major change
+- Architecture review of cross-module impacts while implementation continues
 
 Rules:
-- Analysis/review agents → always background (no write conflicts)
-- Implementation agents → always foreground and sequential (avoid write conflicts on same files)
-- If two implementation agents touch different modules with no shared files, they CAN run in parallel
-- Coordinator must review each background agent's output before acting on it
+- Analysis/review agents -> always background
+- Implementation agents -> always foreground and sequential
+- Two implementation agents CAN run in parallel if they touch different files with no overlap
+- Coordinator reviews each background agent's output before acting on it
 
-### Phase Summary
+### Feature Implementation Workflow (Phases 1-5)
 
-**Phase 1 — Deep Research** (MANDATORY before code)
+> Discovery agents should read relevant docs/READMEs first and flag inaccuracies.
+
+**Phase 1 -- Deep Research** (MANDATORY before code)
 Spawn parallel Explore agents for: module internals, similar patterns, data flow, domain expertise. Synthesize into unified understanding.
 
-**Phase 2 — Cross-Cutting Analysis**
+**Phase 2 -- Cross-Cutting Analysis**
 Spawn agents for: thread safety, state flow / UI bindings, implicit dependencies. Synthesize into risk assessment.
+**-> Run Context Capacity Check here. If SPLIT, follow Self-Replication Protocol.**
 
-**Phase 3a — Draft Implementation Plan**
-Write `PLAN_<FEATURE_NAME>.md` in `Plans/`. Must include: architecture + rationale, files/classes to change, dependency order, cross-cutting mitigations, edge cases, testing.
+**Phase 3a -- Draft Implementation Plan**
+Write `PLAN_<NAME>.md` in `Plans/`. Must include: architecture + rationale, files/classes to change, dependency order, cross-cutting mitigations, edge cases, testing.
 
-**Phase 3b — Expert Review Panel** (MANDATORY before presenting to user)
-Spawn parallel Review Agents to critique the draft plan. Select reviewers based on task scope:
-- Software Architect (ALWAYS): structural soundness, coupling, patterns, API design
-- Thread Safety Reviewer (if concurrency): races, deadlocks, synchronization
-- UX/UI Expert (if UI): layout, interaction, accessibility, consistency
-- DSP Engineer (if audio/signal): latency, buffers, real-time safety
-- Musician (if musical features): workflow feel, musical correctness, creative utility
+**Phase 3b -- Expert Review Panel** (MANDATORY before presenting to user)
+Spawn parallel Review Agents to critique the draft plan. Select reviewers based on domain:
+- Software Architect (ALWAYS)
+- Thread Safety Reviewer (if concurrency)
+- UX/UI Expert (if UI changes)
+- Domain Expert (if specialized -- audio, security, performance, etc.)
 Incorporate feedback, then present final plan. **Stop and wait for user approval.**
 
-**Phase 4 — Implementation**
+**Phase 4 -- Implementation**
 Follow plan with todo tracking. Spawn Implementation Agents per area. Coordinator reviews each before proceeding. Build after each major part. User approval between phases.
 
-**Phase 5 — Verification**
+**Phase 5 -- Verification**
 Spawn parallel Review Agents per module + cross-module agent. Fix issues before proceeding.
 
-**Completion** → Run Finish Task workflow.
+**Completion** -> Run Finish Task workflow.
 
 ### Key Principles
 
 - Analyze deeply before writing code
 - Explore parallel, implement sequential
 - Plan first, approve, then code
-- Coordinator never blindly merges
+- Coordinator never blindly merges sub-agent output
 - Cross-cutting analysis is mandatory
 - Match existing codebase patterns
 - Verify with independent review agents
@@ -235,11 +285,22 @@ Spawn parallel Review Agents per module + cross-module agent. Fix issues before 
 
 ## Context Management
 
-- `/compact` when context is getting long but task is mid-phase and you need to continue
-- Fresh session (`claude --continue`) when starting a new phase or after completing a major milestone
-- NEVER `/compact` during Phase 1-2 synthesis — sub-agent findings in coordinator context may be lost
-- If context is full during Phase 4: finish current implementation unit, commit, then fresh session with `claude --continue`
-- Sub-agent heavy workflows fill context fast — monitor and plan compaction points between phases, not during them
+**Within a session:**
+- `/compact` when context is long but task is mid-phase
+- NEVER `/compact` during Phase 1-2 synthesis -- sub-agent findings may be lost
+- Plan compaction points between phases, not during them
+
+**Context exhaustion:**
+- **Implementer (remaining_splits > 0):** If context fills during research/planning, consider pivoting to Coordinator
+- **Implementer (remaining_splits == 0, LEAF):** Finish current unit, commit WIP, write `COMPLETION_REPORT.md` ("Partial -- needs continuation"), STOP
+- **Any worker during Phase 4:** Finish current implementation unit, commit, then `claude --continue`
+- **Coordinator:** Use `--continue` to resume; plan docs + Trello serve as external memory
+
+**2 compaction rule:** Any worker compacted 2+ times before reaching Phase 4 should evaluate splitting (if `remaining_splits > 0`) or commit WIP and stop (if leaf).
+
+**Fresh sessions:**
+- `claude --continue` when starting a new phase or after a major milestone
+- Never `/compact` when synthesizing sub-agent findings
 
 ---
 
@@ -247,30 +308,25 @@ Spawn parallel Review Agents per module + cross-module agent. Fix issues before 
 
 **Triggers:** "finish task", "complete task", "done with this task"
 
-**Step 1:** Verify build: `./Scripts/build.sh` — if fails, fix first
+**Step 1:** Verify build passes -- if fails, fix first
 
-**Step 2:** Update plan: mark PLAN_<FEATURE_NAME>.md complete, add status + date, document deviations
+**Step 2:** Update plan: mark PLAN_<NAME>.md complete, add status + date, document deviations
 
 ### Documentation Maintenance (mandatory on every feature completion)
 
-Before committing, spawn a Review Agent (Explore) to check if any of these need updating:
-- docs/ARCHITECTURE.md — new classes, changed module boundaries, new dependencies, signal flow changes
-- docs/DEVELOPER_GUIDE.md — new patterns, anti-patterns discovered, lessons learned, new gotchas
-- Per-directory READMEs — new files, changed APIs, new integration points
-- .claude/rules/ — new constraints discovered (e.g. thread safety issue found, new convention established)
-- .claude/skills/ — if a common task was done manually that should be a skill, or existing skill steps are now wrong
-- Project CLAUDE.md — if @ imports need updating
+Before committing, spawn a Review Agent (Explore) to check if project docs need updating:
+- Architecture docs -- new classes, changed module boundaries, dependencies, data flow
+- Developer guide -- new patterns, anti-patterns, lessons learned, gotchas
+- Per-directory READMEs -- new files, changed APIs, integration points
+- Rules files -- new constraints discovered (thread safety, conventions)
+- Skills -- common manual tasks that should be automated, or stale skill steps
+- Project CLAUDE.md -- if imports or references need updating
 
 The Review Agent should:
 1. Read the git diff of all changes in this feature
 2. Compare against existing docs
 3. Report what's stale or missing
 4. Coordinator updates docs before final commit
-
-If new patterns or anti-patterns were discovered during implementation:
-- Add patterns to DEVELOPER_GUIDE.md with rationale
-- Add anti-patterns with "why this breaks" explanation
-- If it's a hard constraint, add a .claude/rules/ entry scoped to the relevant paths
 
 Documentation changes are committed alongside feature code, not as separate commits.
 
@@ -281,10 +337,10 @@ git commit -m "<type>: <description>
 
 <detailed summary>
 
-Plan: Plans/PLAN_<FEATURE_NAME>.md
+Plan: Plans/PLAN_<NAME>.md
 Trello: <card-url>
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+Co-Authored-By: Claude <noreply@anthropic.com>"
 ```
 
 **Step 4:** Update Trello: move to "Testing" or "Done" (ask user), update description with date/plan/commits/status
@@ -313,8 +369,8 @@ tmux kill-session -t <session-name>
 
 1. Gather: Trello "Implementing" cards, active tmux sessions, PLAN_*.md files, P1/P2 from "To Do"
 2. Show active tasks table: Task | Priority | tmux | Branch | Worktree | Plan | Phase
-   - Phase: "Discovery" (no PLAN) → "Planning" (PLAN exists) → "Implementation" (commits after plan) → "Completed" (merged)
-3. Show stale tasks: "Implementing" cards without active tmux/recent activity → suggest cleanup or resume
+   - Phase: "Discovery" (no PLAN) -> "Planning" (PLAN exists) -> "Implementation" (commits after plan) -> "Completed" (merged)
+3. Show stale tasks: "Implementing" cards without active tmux/recent activity -> suggest cleanup or resume
 4. Show high priority backlog: P1-Critical + P2-High from To Do
 5. Suggest actions: attach, start working, finish task, recover task
 
@@ -329,7 +385,6 @@ Each worktree = effectively named by task.
 
 **Step 1:** Find worktree:
 ```bash
-# Derive project paths from main worktree
 MAIN_WORKTREE=$(git worktree list | head -1 | awk '{print $1}')
 PARENT_DIR=$(dirname "$MAIN_WORKTREE")
 PROJECT=$(basename "$MAIN_WORKTREE")
@@ -347,13 +402,13 @@ ls ~/.claude/projects/${PROJECT_DIR}/*.jsonl 2>/dev/null
 
 **Step 3:** Check tmux: `tmux list-sessions | grep -i "<task-name>"`
 
-**Step 4a:** tmux exists, Claude not running → attach + `claude --continue`
+**Step 4a:** tmux exists, Claude not running -> attach + `claude --continue`
 
 **Step 4b:** No tmux session:
 ```bash
 tmux new-session -d -s <session-name> -c "$WORKTREE_PATH"
 tmux split-window -t <session-name> -v -p 30 -c "$WORKTREE_PATH"
-tmux send-keys -t <session-name>:.1 "claude --continue" Enter
+tmux send-keys -t <session-name>:.1 "unset CLAUDECODE && claude --continue" Enter
 osascript <<EOF
 tell application "iTerm2"
     tell current window
@@ -368,7 +423,7 @@ EOF
 
 **Step 5:** Report: worktree found, session found, tmux recreated, Claude resumed
 
-**Notes:** `claude --continue` = most recent session in cwd. `claude --resume <id>` = specific session. Multiple sessions → use `claude --resume` with picker.
+**Notes:** `claude --continue` = most recent session in cwd. `claude --resume <id>` = specific session. Multiple sessions -> use `claude --resume` with picker.
 
 ---
 
@@ -392,16 +447,16 @@ EOF
 **Board:** [Curiosity Lab](https://trello.com/b/vqVDt871/curiosity-lab) (ID: `68e392ae2b71aa7ba30e8c92`)
 
 **Lists:**
-- Inbox (`698b63e8e2b5cfadb042f7fc`) — raw ideas
-- Researching (`698b63e9123e9eb3c5eeb7a3`) — actively investigating
-- Findings (`698b63ea963859732572676e`) — results and conclusions
-- Parked (`698b63ead80c1ef2f75ac44d`) — interesting but not now
+- Inbox (`698b63e8e2b5cfadb042f7fc`) -- raw ideas
+- Researching (`698b63e9123e9eb3c5eeb7a3`) -- actively investigating
+- Findings (`698b63ea963859732572676e`) -- results and conclusions
+- Parked (`698b63ead80c1ef2f75ac44d`) -- interesting but not now
 
 **What to do:**
 1. Create card in Inbox list with:
    - Clear title: "Research: <topic summary>"
    - Description with: core question, specific sub-questions to explore, related concepts, what a good answer looks like
-2. Append user's exact prompt(s) at the bottom of the description under "## Raw Prompts (Original Thinking)" as blockquotes
+2. Append user's exact prompt(s) at the bottom under "## Raw Prompts (Original Thinking)" as blockquotes
 3. Report: card link + brief summary of what was captured
 
 **Card description structure:**

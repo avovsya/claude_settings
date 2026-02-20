@@ -12,3 +12,6 @@
 !plans/**
 !rules/
 !rules/**
+!hooks/
+!hooks/**
+!CHEATSHEET.md

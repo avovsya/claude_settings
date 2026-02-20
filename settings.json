@@ -1,12 +1,5 @@
 {
   "permissions": {
-    "deny": [
-      "Bash(sudo *)",
-      "Bash(rm -rf /)*",
-      "Bash(git push --force*)",
-      "Bash(git reset --hard*)",
-      "Bash(git clean -f*)"
-    ],
     "allow": [
       "Bash(./Scripts/*)",
       "Bash(cat *)",
@@ -81,10 +74,18 @@
       "Bash(test *)",
       "Bash([ *)",
       "mcp__trello__*"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(rm -rf /)*",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)"
     ]
   },
   "enabledPlugins": {
     "clangd-lsp@claude-plugins-official": true
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "skipDangerousModePermissionPrompt": true
 }
