@@ -10,6 +10,8 @@
 !mcp.json.template
 !plans/
 !plans/**
+# Ignore temporary/draft plans from worker agents
+plans/label-autoconfirm-skew.md
 !rules/
 !rules/**
 !hooks/
