@@ -1,0 +1,29 @@
+{
+  "name": "coordinator-agent",
+  "version": "1.0.0",
+  "description": "Persistent coordinator daemon for managing Claude Code worker sessions",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "coordinator": "./build/index.js",
+    "coord": "./build/cli/coord.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js",
+    "coord": "node build/cli/coord.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

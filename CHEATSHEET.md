@@ -178,6 +178,49 @@ The Dispatcher finds the worktree, recreates the tmux session if needed, and run
 
 ---
 
+## Coordinator Daemon (Alternative L1)
+
+The `coordinator/` daemon is an autonomous alternative to the Claude Code Dispatcher session. It runs as a plain Node.js daemon (no LLM in the poll loop), monitors workers via session-bus, and surfaces approval gates via the `coord` CLI.
+
+### Setup
+
+```bash
+cd coordinator && npm install && npm run build && npm link
+```
+
+### Start
+
+```bash
+node coordinator/build/index.js --main-worktree /path/to/main/repo
+# Or via launchd (see coordinator/com.coordinator.agent.plist)
+```
+
+### Key CLI Commands
+
+```
+coord status                      # Dashboard: workers, approvals, merge queue
+coord list                        # Pending approvals
+coord approve [session-id]        # Approve plan or merge (--changes "feedback")
+coord reject <session-id> "why"   # Reject with feedback
+coord spawn <card-name>           # Request worker spawn
+coord logs <session-id>           # Session-bus events for a worker
+coord stop                        # Graceful shutdown
+```
+
+### How It Differs from the Dispatcher
+
+| Aspect | Dispatcher | Coordinator Daemon |
+|--------|------------|-------------------|
+| Technology | Claude Code session (LLM) | Node.js daemon (no LLM) |
+| Runs in | Terminal (foreground) | Background (launchd) |
+| Approvals | "looks good" in chat | `coord approve` CLI |
+| Monitoring | "wip" command | `coord status` CLI |
+| Crash recovery | `claude --continue` | Auto-restart (launchd KeepAlive) |
+
+See `coordinator/README.md` for full documentation.
+
+---
+
 ## When a Worker Splits
 
 **How you'll know:** The worker says something like:
