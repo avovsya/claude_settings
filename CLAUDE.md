@@ -115,7 +115,7 @@ When a worker decides to split:
    - `start_phase: {N}` and `remaining_splits: {current - 1}`
 5. **SIGNAL** human: "Task too large for one context. N phase prompts ready. Approve?"
 6. **WAIT** for human approval
-7. **SPAWN** children via tmux: `unset CLAUDECODE && cat /tmp/phase-N-prompt.md | claude`
+7. **SPAWN** children via tmux: `unset CLAUDECODE && cat /tmp/phase-N-prompt.md | claude --dangerously-skip-permissions`
 8. **BECOME** Coordinator -- no more implementation code, just reads children's output, writes next prompts
 
 ### Agent Roles (within any worker)
@@ -214,6 +214,40 @@ Spawn parallel Review Agents per module + cross-module agent. Fix issues before 
 **Fresh sessions:**
 - `claude --continue` when starting a new phase or after a major milestone
 - Never `/compact` when synthesizing sub-agent findings
+
+---
+
+## Worker Permissions
+
+Workers spawned via `/spawn-worker` run with `--dangerously-skip-permissions` for zero permission friction.
+
+### What This Means
+
+- **All permission checks bypassed** — file edits, bash commands, git operations, MCP calls auto-approved
+- **Deny list also bypassed** — workers can theoretically run commands blocked by `settings.json` deny rules
+- **Per-session only** — the dispatcher retains standard permission prompts
+- **Isolated worktrees** — workers run on feature branches, cannot affect main without dispatcher merge
+
+### Safety Model
+
+Workers are safe to run with bypass because:
+1. **Worktree isolation** — each worker has its own directory and branch
+2. **Merge gating** — only the dispatcher merges to main (after reviewing diffs)
+3. **Model constraints** — Claude has built-in safety regardless of permission settings
+4. **Short-lived** — worker sessions run for hours, not days
+5. **No remote push** — workers don't push; dispatcher handles remote operations
+
+### Dispatcher Responsibilities
+
+- Review `git diff main..<branch>` before merging any worker's code
+- Verify build passes in the worker's worktree before merge
+- Clean up stale worktrees periodically
+
+### Adjusting Permissions
+
+- **Disable bypass for one worker:** Remove `--dangerously-skip-permissions` from the launch command in `/spawn-worker` SKILL.md Step 9
+- **Coordinator-spawned children:** Must also include `--dangerously-skip-permissions` (see Self-Replication Protocol step 7)
+- **If Claude Code updates break the flag:** Check `claude --help` and update SKILL.md + Self-Replication Protocol accordingly
 
 ---
 
