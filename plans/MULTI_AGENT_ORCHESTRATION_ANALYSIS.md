@@ -918,7 +918,7 @@ This builds a dataset of which tasks trigger compaction, informing future `fits_
 | 1 | **Phase completion hook** | Post-command hook writes `/tmp/claude-phase-complete-*.json` signal files when worker outputs "Completion Report" | Eliminates manual tmux attachment for status checks |
 | 2 | **Enhanced `/wip` dashboard** | Reads build.log + phase signals + stale task detection (no commit in 2h) | Replaces scattered manual checks |
 | 3 | **Structured completion format** | YAML front matter in worker reports (machine-parseable status, artifacts, blockers) | Makes phase transitions automatable |
-| 4 | **Prompt caching** | `cache_control: { type: "ephemeral" }` on ARCHITECTURE.md/CLAUDE.md in sub-agent system prompts | 50% cost reduction on repeated doc reads |
+| 4 | **~~Prompt caching~~** | ~~`cache_control: { type: "ephemeral" }` on ARCHITECTURE.md/CLAUDE.md in sub-agent system prompts~~ **RESEARCHED 2026-02-20:** Not actionable — sub-agents don't receive CLAUDE.md (isolated 200-600 token prompts); main session already auto-caches. See `plans/FINDINGS_PROMPT_CACHING.md`. Replaced with sub-agent cost discipline in CLAUDE.md. | ~~50% cost reduction~~ 10-30% via prompt discipline |
 
 **Total: 6-8 hours for 40% friction reduction**
 
