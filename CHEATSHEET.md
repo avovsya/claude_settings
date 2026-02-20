@@ -117,7 +117,17 @@ Tell the Dispatcher:
 "task status"                  -- same thing
 ```
 
-Shows: active tasks table, stale tasks, backlog, suggested actions.
+Shows enhanced dashboard:
+```
+| Task | Priority | tmux | Branch | Phase | Build | Last Activity | Health |
+|------|----------|------|--------|-------|-------|---------------|--------|
+| Feature X | P1 | active | feat/x | Phase 4 | PASS | 15m ago | 1 compaction |
+| Bug Y | P2 | — | fix/y | Planning | — | 3h ago (STALE) | 0 compactions |
+```
+
+**Data sources:** Trello cards, tmux sessions, git worktrees + commit history, `Plans/PLAN_*.md`, build logs (per worktree), `/tmp/claude-phase-complete-*.json` (phase signals), `~/.claude/compaction-metrics.jsonl` (context health).
+
+**Stale:** No commits in 2+ hours AND no active tmux → flagged for cleanup/resume.
 
 ### Testing Between Phases
 
@@ -258,7 +268,7 @@ The Dispatcher finds the worktree, recreates the tmux session if needed, and run
 ### Check status of all active workers
 
 1. In Dispatcher: `"wip"`
-2. Review: active tasks, phases, tmux sessions, stale tasks
+2. Review: active tasks table (phase, build, last activity, health), stale tasks, backlog
 3. Attach to any worker to check progress: `tmux attach -t <name>`
 
 ---

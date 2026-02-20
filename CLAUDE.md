@@ -276,12 +276,27 @@ tmux kill-session -t <session-name>
 
 **Triggers:** "wip", "task status", "what am I working on"
 
-1. Gather: Trello "Implementing" cards, active tmux sessions, PLAN_*.md files, P1/P2 from "To Do"
-2. Show active tasks table: Task | Priority | tmux | Branch | Worktree | Plan | Phase
-   - Phase: "Discovery" (no PLAN) -> "Planning" (PLAN exists) -> "Implementation" (commits after plan) -> "Completed" (merged)
-3. Show stale tasks: "Implementing" cards without active tmux/recent activity -> suggest cleanup or resume
-4. Show high priority backlog: P1-Critical + P2-High from To Do
-5. Suggest actions: attach, start working, finish task, recover task
+1. **Gather** from all active worktrees:
+   - Trello "Implementing" cards, active tmux sessions (`tmux list-sessions`)
+   - `Plans/PLAN_*.md` files, P1/P2 from "To Do"
+   - Per worktree: last commit time (`git log -1 --format="%ct"`), build logs, phase signals, compaction metrics
+
+2. **Show active tasks table:**
+
+   | Task | Priority | tmux | Branch | Phase | Build | Last Activity | Health |
+   |------|----------|------|--------|-------|-------|---------------|--------|
+
+   Column details:
+   - **Phase:** From `/tmp/claude-phase-complete-*.json` if exists (parse `phase` field), else heuristic: no PLAN → Discovery, PLAN exists → Planning, commits after plan → Implementation, merged → Completed
+   - **Build:** Most recent `build.log` or `build/*.log` in worktree (by mtime). PASS / FAIL / — (no logs)
+   - **Last Activity:** Relative time since last commit (`git log -1 --format="%cr"`). Mark **(STALE)** if 2+ hours
+   - **Health:** Compaction count from `~/.claude/compaction-metrics.jsonl` (entries matching worktree cwd, last 24h). — if unavailable
+
+3. **Stale tasks:** "Implementing" cards where BOTH: no commits in 2+ hours AND no active tmux session → suggest cleanup or resume
+
+4. **High priority backlog:** P1-Critical + P2-High from "To Do"
+
+5. **Suggest actions:** attach, start working, finish task, recover task
 
 ---
 
