@@ -177,7 +177,7 @@ Follow plan with todo tracking. Spawn Implementation Agents per area. Coordinato
 **Phase 5 -- Verification**
 Spawn parallel Review Agents per module + cross-module agent. Fix issues before proceeding.
 
-**Completion** -> Run Finish Task workflow.
+**Completion** -> Run Finish Task workflow (writes structured `COMPLETION_REPORT.md`).
 
 ### Key Principles
 
@@ -201,7 +201,7 @@ Spawn parallel Review Agents per module + cross-module agent. Fix issues before 
 
 **Context exhaustion:**
 - **Implementer (remaining_splits > 0):** If context fills during research/planning, consider pivoting to Coordinator
-- **Implementer (remaining_splits == 0, LEAF):** Finish current unit, commit WIP, write `COMPLETION_REPORT.md` ("Partial -- needs continuation"), STOP
+- **Implementer (remaining_splits == 0, LEAF):** Finish current unit, commit WIP, write `COMPLETION_REPORT.md` with structured YAML front matter and `status: partial` (see Finish Task Step 7), STOP
 - **Any worker during Phase 4:** Finish current implementation unit, commit, then `claude --continue`
 - **Coordinator:** Use `--continue` to resume; plan docs + Trello serve as external memory
 
@@ -268,7 +268,41 @@ git branch -d <branch-name>
 tmux kill-session -t <session-name>
 ```
 
-**Step 7:** Report: build status, plan doc, commit hash, Trello list, merge status, cleanup status, files/lines changed
+**Step 7:** Write `COMPLETION_REPORT.md` in the worktree root with YAML front matter followed by a human-readable report:
+
+```yaml
+---
+status: completed
+branch: <branch-name>
+commit: <commit-hash>
+completed_at: "YYYY-MM-DD"
+phase_completed: 5
+plan_doc: Plans/PLAN_<NAME>.md
+artifacts:
+  - path/to/changed/file1
+  - path/to/changed/file2
+blockers: []
+next_steps: []
+---
+```
+
+Followed by the human-readable summary:
+
+```
+## Completion Report
+
+| Item | Detail |
+|------|--------|
+| Build | Passed/Failed |
+| Plan | Plans/PLAN_<NAME>.md — COMPLETED |
+| Commit | <hash> on <branch> |
+| Trello | <list-name> |
+| Merge | Merged to main / Not merged |
+| Files changed | N files, +X / -Y lines |
+| Docs updated | <list of updated docs> |
+```
+
+The YAML front matter enables machine-parseable status for coordinators and automation. For partial completions (leaf worker context exhaustion) use `status: partial`; for blocked tasks use `status: blocked`. See field definitions in `Plans/PLAN_STRUCTURED_COMPLETION_FORMAT.md`.
 
 ---
 

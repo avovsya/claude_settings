@@ -19,7 +19,7 @@ Persistent reminder for long-running feature sessions. Context compression may d
 
 **Leaf workers (remaining_splits == 0):**
 - MUST complete in one context -- no splitting allowed
-- If context exhausted: commit WIP, write COMPLETION_REPORT.md, STOP
+- If context exhausted: commit WIP, write COMPLETION_REPORT.md with `status: partial` (structured YAML front matter), STOP
 - Do NOT spawn child workers or tmux sessions
 
 **Before committing (Finish Task):**
@@ -27,6 +27,7 @@ Persistent reminder for long-running feature sessions. Context compression may d
 - Update PLAN_*.md with status, date, deviations
 - **Documentation Maintenance (mandatory):** Spawn a Review Agent to check if docs need updating -- see "Finish Task" in CLAUDE.md. Do NOT skip this step.
 - Update Trello card (move list, update description)
+- Write `COMPLETION_REPORT.md` with structured YAML front matter (status, branch, commit, artifacts, blockers, next_steps)
 
 ## Common Mistakes in Long Sessions
 
@@ -39,3 +40,4 @@ Persistent reminder for long-running feature sessions. Context compression may d
 - Not updating Trello card at completion
 - Running parallel implementation agents on files that overlap -- always check for shared files first
 - **Leaf worker spawning children** -- remaining_splits=0 means NO child workers
+- Writing COMPLETION_REPORT.md without YAML front matter -- always use the structured format (see Finish Task Step 7 in CLAUDE.md)
