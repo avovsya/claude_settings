@@ -135,6 +135,10 @@ When a worker decides to split:
 - Report: (1) findings, (2) changes made, (3) cross-module impacts
 - Coordinator reviews all output before proceeding
 - Parallel for independent areas; sequential when dependent
+- **Cost efficiency:** Sub-agents don't inherit parent context or share caches — each is an isolated conversation. To reduce redundant token usage:
+  - Give each agent a focused, non-overlapping file scope (avoid 5 agents all reading the same files)
+  - Include shared context excerpts in the Task prompt rather than having each agent independently read the same docs
+  - Use `model: "haiku"` for Explore/review agents (default); reserve Opus for coordinator reasoning
 
 ### Background Agent Usage
 
