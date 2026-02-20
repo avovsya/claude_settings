@@ -10,6 +10,7 @@ Global configuration for [Claude Code](https://claude.ai/claude-code). Contains 
 | `CLAUDE_REFERENCE.md` | Human-readable companion with diagrams, examples, rationale |
 | `settings.json` | Global Claude Code settings |
 | `mcp.json.template` | MCP server config template (secrets redacted) |
+| `coordinator/` | Persistent Node.js daemon — autonomous L1 coordinator (replaces Dispatcher session) |
 | `mcp-servers/` | Custom MCP servers (tmux-control, session-bus) |
 | `plans/` | Implementation plan documents |
 | `skills/` | Claude Code skills (automated workflows invoked via `/skill-name`) |

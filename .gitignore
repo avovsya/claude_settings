@@ -23,5 +23,10 @@ plans/label-autoconfirm-skew.md
 # Ignore build artifacts and deps within mcp-servers
 mcp-servers/**/node_modules/
 mcp-servers/**/build/
+!coordinator/
+!coordinator/**
+# Ignore build artifacts and deps within coordinator
+coordinator/node_modules/
+coordinator/build/
 !CHEATSHEET.md
 !COMPLETION_REPORT.md

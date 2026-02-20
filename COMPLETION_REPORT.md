@@ -1,32 +1,36 @@
 ---
 status: completed
-branch: feature/session-bus-mcp-server
-commit: 13f51c7
+branch: feature/coordinator-agent-sdk
+commit: 5b28894
 completed_at: "2026-02-20"
 phase_completed: 5
-plan_doc: plans/PLAN_SESSION_BUS_MCP.md
+plan_doc: Plans/PLAN_COORDINATOR_AGENT_SDK.md
 artifacts:
-  - mcp-servers/session-bus/src/types.ts
-  - mcp-servers/session-bus/src/store.ts
-  - mcp-servers/session-bus/src/index.ts
-  - mcp-servers/session-bus/src/tools/publish.ts
-  - mcp-servers/session-bus/src/tools/events.ts
-  - mcp-servers/session-bus/src/tools/sessions.ts
-  - mcp-servers/session-bus/src/tools/gc.ts
-  - mcp-servers/session-bus/package.json
-  - mcp-servers/session-bus/tsconfig.json
-  - mcp-servers/session-bus/README.md
-  - mcp-servers/session-bus/.gitignore
-  - plans/PLAN_SESSION_BUS_MCP.md
-  - settings.json
-  - mcp.json.template
-  - README.md
+  - coordinator/src/index.ts
+  - coordinator/src/coordinator.ts
+  - coordinator/src/db.ts
+  - coordinator/src/types.ts
+  - coordinator/src/logger.ts
+  - coordinator/src/worker-manager.ts
+  - coordinator/src/approval-manager.ts
+  - coordinator/src/merge-manager.ts
+  - coordinator/src/session-bus-reader.ts
+  - coordinator/src/tmux-client.ts
+  - coordinator/src/git-client.ts
+  - coordinator/src/prompt-generator.ts
+  - coordinator/src/notifications.ts
+  - coordinator/src/cli/coord.ts
+  - coordinator/package.json
+  - coordinator/tsconfig.json
+  - coordinator/com.coordinator.agent.plist
+  - coordinator/README.md
+  - Plans/PLAN_COORDINATOR_AGENT_SDK.md
 blockers: []
 next_steps:
-  - Integrate session bus calls into /spawn-worker skill (register session on spawn)
-  - Update phase-completion-hook.sh to publish phase_complete events to session bus
-  - Add session bus reads to Task Status workflow for cross-session visibility
-  - Build dashboard skill that reads session bus events for real-time worker monitoring
+  - "Trello integration (trello-client.ts) — coord spawn should look up cards and move to Implementing"
+  - "Unit tests for DB operations, event cursor logic, staleness detection"
+  - "Integration tests: spawn real tmux session, write session-bus events, verify coordinator reacts"
+  - "Card #11: Convert workers from tmux CLI to SDK sessions (future iteration)"
 ---
 
 ## Completion Report
@@ -34,37 +38,56 @@ next_steps:
 | Item | Detail |
 |------|--------|
 | Build | Passed |
-| Plan | plans/PLAN_SESSION_BUS_MCP.md — COMPLETED |
-| Commit | 13f51c7 on feature/session-bus-mcp-server |
-| Trello | Not updated (card not found on searched boards) |
-| Merge | Not merged (awaiting dispatcher review) |
-| Files changed | 16 files, +3024 / -1 lines |
-| Docs updated | README.md, mcp.json.template, settings.json, mcp-servers/session-bus/README.md |
+| Plan | Plans/PLAN_COORDINATOR_AGENT_SDK.md — COMPLETED |
+| Commit | 5b28894 on feature/coordinator-agent-sdk |
+| Trello | https://trello.com/c/w2BdRl4J/12-10-coordinator-agent-sdk |
+| Merge | Not merged (awaiting human review) |
+| Files changed | 23 files, +4542 lines |
+| Docs updated | README.md (table entry), CHEATSHEET.md (coordinator section), coordinator/README.md, Plans/PLAN_COORDINATOR_AGENT_SDK.md |
 
 ## Summary
 
-Built a file-based pub/sub MCP server enabling structured communication between Claude Code sessions. Workers publish status events (phase_complete, blocked, error, build_result, etc.) and coordinators subscribe — replacing the human as the sole message bus between sessions.
+Built a persistent Node.js daemon that replaces the long-running Claude Code L1 Dispatcher session for autonomous worker management. The coordinator runs a polling loop, monitors workers via session-bus events, manages tmux sessions and git worktrees, and surfaces human approval gates via the `coord` CLI.
 
 ## Architecture
 
-- **Lock-free atomic writes** via tmp+rename (POSIX guarantees)
-- **Per-session directories** with individual JSON event files for debuggability
-- **In-memory sequence counters** rebuilt from disk on server startup
-- **Auto-GC** on startup cleans terminal sessions older than 7 days
-- **Follows tmux-control MCP server patterns** (TypeScript + Zod + modular tools)
+- **Hybrid design:** Coordinator is a plain Node.js daemon (no LLM), workers remain tmux CLI processes for debuggability and recursive spawning
+- **SQLite state store** (coordinator.db) with WAL mode and busy_timeout for crash safety
+- **Session-bus reader** (read-only, except pre-registration with unique session IDs)
+- **Dual-channel approval delivery:** Decision files + tmux fallback when worker is idle
+- **launchd integration** for auto-start and crash recovery on macOS
 
-## Tools Implemented (8)
+## Components (16 source files)
 
-1. `session_bus_publish` — Publish events to a session
-2. `session_bus_read_events` — Read events with filtering (type, since, lastN)
-3. `session_bus_register_session` — Register a session with metadata
-4. `session_bus_get_session` — Get session metadata
-5. `session_bus_update_session` — Update session status/fields
-6. `session_bus_list_sessions` — List sessions with filtering
-7. `session_bus_garbage_collect` — Clean up old sessions/events
-8. `session_bus_health` — Health check
+| Component | File | Purpose |
+|-----------|------|---------|
+| Entry point | index.ts | PID lock, signal handlers, config |
+| Coordinator | coordinator.ts | Poll loop, recovery, sleep/wake detection |
+| Database | db.ts | SQLite schema (6 tables), CRUD, transactions |
+| Types | types.ts | Zod schemas, DB row interfaces, config |
+| Worker Manager | worker-manager.ts | Spawn, poll, event handling, staleness |
+| Approval Manager | approval-manager.ts | Decision pickup, delivery retry, reminders |
+| Merge Manager | merge-manager.ts | Queue, --no-ff merge, crash recovery |
+| Session-bus Reader | session-bus-reader.ts | Read-only file access, cursor filtering |
+| tmux Client | tmux-client.ts | Session/pane management, Claude launch |
+| Git Client | git-client.ts | Worktree, merge, branch (safe operations) |
+| Prompt Generator | prompt-generator.ts | Worker prompt files |
+| Notifications | notifications.ts | Bell, macOS osascript |
+| Logger | logger.ts | Structured JSON, rotation, deduplication |
+| CLI | cli/coord.ts | status, list, approve, reject, spawn, logs, stop |
 
-## Bugs Found & Fixed During Verification
+## Deviations from Plan
 
-1. **Wrong error code in `validateStatus()`** — Used `INVALID_SESSION_ID` instead of `INVALID_STATUS`
-2. **Invalid `since` timestamp silently ignored** — NaN from bad date parsing was falsy, skipping filter instead of throwing
+1. **trello-client.ts not implemented** — Trello REST API integration deferred to follow-up
+2. **recovery.ts merged into coordinator.ts** — Recovery logic simple enough for one class
+3. **DB columns renamed** — `commit` → `commit_hash`, `merge_commit` → `merge_commit_hash` (SQLite reserved words)
+4. **Session-bus reader is standalone** — Own file reading instead of importing FileEventStore
+
+## Verification Issues Fixed
+
+- **Medium:** `wip_committed` handler used stale worker status; now reads fresh from DB
+- **Medium:** Merge approval queried by `session_id` not `approval_id`; could block on unrelated approvals
+- **Medium:** Approval delivery had no retry when worker not idle; now tracks and retries
+- **Low:** `preRegisterSession` silently swallowed rename errors; now throws
+- **Low:** `isBranchMerged` used substring match; now exact line-by-line comparison
+- **Low:** CLI `cmdApprove` could misparse `--changes` as sessionId; now checks `--` prefix
