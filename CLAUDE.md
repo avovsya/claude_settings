@@ -8,149 +8,26 @@ Human-readable reference with diagrams and examples: `CLAUDE_REFERENCE.md`
 
 **Triggers:** "start working on card/task X", "work on X", "work on next P1"
 
-For "next high priority": fetch P1-Critical cards from To Do list, pick first.
+Use `/spawn-worker` — it handles the full spawn cycle: card lookup, git worktree, tmux, prompt generation, and Claude launch.
 
-### Setup (Current Session)
-
-**Step 1: Find card**
-- Trello MCP search by name
-- 0 matches → fuzzy search or ask user
-- Multiple matches → list and ask user
-- "next high priority" → P1-Critical from To Do list
-
-**Step 2: Verify card state**
-- Already in "Implementing" with branch → ask: resume or start fresh?
-- In "Done"/"Archived" → warn and confirm
-
-**Step 3: Verify git state**
-```bash
-git status --porcelain
-# Uncommitted changes → warn and stop
+```
+/spawn-worker <card-name-or-url> [--splits N] [--phase N]
+/spawn-worker next                # next P1-Critical from To Do
 ```
 
-**Step 4: Create branch name**
-- Kebab-case from card title: `<type>/<short-description>` (max 50 chars)
-- Types: `feature/`, `fix/`, `refactor/`, `docs/`
-- Too long → suggest shorter, confirm with user
+See `skills/spawn-worker/SKILL.md` for the complete step-by-step instructions.
 
-**Step 5: Create worktree**
-```bash
-git worktree list | grep <branch-name>
-git branch --list <branch-name>
-git worktree add -b <branch-name> /absolute/path/to/parent/<project>-<branch-name> main
-```
+### Quick Reference (what /spawn-worker does)
 
-**Step 6: Update Trello**
-- Move card to "Implementing"
-- Append to description: Branch, Worktree path, Started date
-
-**Step 7: Start tmux**
-
-Sessions stored per-directory at `~/.claude/projects/`. Each worktree = named session. Resume with `claude --continue` or `recover task <name>`.
-
-```bash
-tmux new-session -d -s <session-name> -c /absolute/path/to/worktree
-tmux split-window -t <session-name> -v -p 30 -c /absolute/path/to/worktree
-# Pane 1 (top 70%): Claude Code | Pane 2 (bottom 30%): shell
-```
-
-**Step 8: Start Claude with initial prompt**
-
-The prompt MUST include the FULL workflow instructions. Build as follows:
-
-```bash
-PROMPT='## Task: <card-name>
-
-**Branch:** <branch-name>
-**Card Description:** <card-description-summary>
-
----
-
-## MANDATORY Feature Implementation Workflow (Hierarchical Agent Architecture)
-
-You are the COORDINATOR. Delegate to sub-agents (Task tool), synthesize, integrate.
-NEVER write code without completing Phases 1-3.
-
-**Phase 1: Deep Research (MANDATORY — no code before this completes)**
-Spawn PARALLEL Analysis Agents (Task tool, subagent_type=Explore):
-- Agent A: Read every file in relevant module. Report: public API, state, threading, connections.
-- Agent B: Find all existing similar patterns. Report: conventions, file structure, naming.
-- Agent C: Trace data flow for relevant feature. Report: entry points, transformations, UI bindings.
-- Agent D (if needed): Domain expert review (UX/UI, DSP, architecture, music).
-Synthesize all findings. Answer: "What exists and how does it work?"
-
-**Phase 2: Cross-Cutting Analysis**
-Spawn targeted Analysis Agents:
-- Thread safety implications
-- State flow and UI binding impacts
-- Implicit dependencies (notifications, KVO, delegates, globals)
-Synthesize into risk assessment.
-
-**Phase 3a: Draft Implementation Plan**
-Create PLAN_<FEATURE_NAME>.md in Plans/:
-- Architecture overview with rationale from research
-- Specific files/classes to modify with what and why
-- Implementation order (dependencies first)
-- Cross-cutting concerns and mitigations
-- Edge cases, error handling, thread safety
-
-**Phase 3b: Expert Review Panel (MANDATORY before presenting to user)**
-Spawn PARALLEL Review Agents to critique the draft plan. Select based on what the task touches:
-- Software Architect (ALWAYS): structural soundness, coupling, patterns, API design
-- Thread Safety Reviewer (if concurrency involved): races, deadlocks, synchronization strategy
-- UX/UI Expert (if UI changes): layout, interaction, accessibility, consistency
-- DSP Engineer (if audio/signal processing): latency, buffer handling, real-time safety
-- Musician (if musical features): workflow feel, musical correctness, creative utility
-Incorporate feedback into plan. Then present final plan to user.
-STOP. Do NOT write code until user approves.
-
-**Phase 4: Implementation**
-- Follow plan with todo tracking, dependency order
-- Spawn focused Implementation Agents per major area
-- Coordinator reviews each output before proceeding
-- Build/test after each major part: ./Scripts/build.sh
-- Wait for user approval between major phases
-
-**Phase 5: Verification**
-- Spawn parallel Review Agents per module (correctness, consistency, regressions)
-- Spawn cross-module Review Agent (integration integrity)
-- Fix issues before proceeding
-
-**Completion**
-- On "finish task": verify build, update plan doc, commit, report summary
-
----
-
-**START NOW: Phase 1 (Deep Research). Spawn parallel Analysis Agents.**'
-
-tmux send-keys -t <session-name>:.1 "claude \"$PROMPT\"" Enter
-```
-
-**Step 9: Open iTerm2 tab**
-```bash
-osascript <<EOF
-tell application "iTerm2"
-    tell current window
-        create tab with default profile
-        tell current session
-            write text "tmux attach -t <session-name>"
-        end tell
-    end tell
-end tell
-EOF
-```
-
-**Step 10: Report**
-```
-Output:
-  ✓ Worktree: ../<project>-<branch-name>
-  ✓ Trello card → Implementing
-  ✓ Claude Code running in tmux
-
-  Attach: tmux attach -t <session-name>
-  Panes: Top = Claude Code, Bottom = shell
-  Ctrl-b ↑/↓ switch | Ctrl-b d detach | tmux ls list
-```
+1. **Find card** — Trello MCP search (handles 0/multiple matches, "next" for P1)
+2. **Verify state** — Card state (implementing/done?) + git clean check
+3. **Branch + worktree** — `<type>/<kebab-title>`, `git worktree add`
+4. **Submodules** — Auto-detect from `.gitmodules`, copy from main worktree
+5. **Trello** — Move to "Implementing" (or "Researching" for Curiosity Lab), append metadata
+6. **tmux** — 2-pane (70% Claude / 30% shell)
+7. **Worker prompt** — Write to `/tmp/<session>-prompt.md`, launch with `unset CLAUDECODE && cat | claude`
+8. **iTerm2 tab** — Auto-attach (graceful fallback)
+9. **Report** — Worktree path, branch, attach command
 
 ---
 

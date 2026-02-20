@@ -11,6 +11,7 @@ Global configuration for [Claude Code](https://claude.ai/claude-code). Contains 
 | `settings.json` | Global Claude Code settings |
 | `mcp.json.template` | MCP server config template (secrets redacted) |
 | `plans/` | Implementation plan documents |
+| `skills/` | Claude Code skills (automated workflows invoked via `/skill-name`) |
 
 ## New machine setup
 
