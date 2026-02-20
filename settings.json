@@ -86,6 +86,29 @@
   "enabledPlugins": {
     "clangd-lsp@claude-plugins-official": true
   },
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hooks/pre-compact-metrics.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hooks/phase-completion-hook.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
   "alwaysThinkingEnabled": true,
   "skipDangerousModePermissionPrompt": true
 }
