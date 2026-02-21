@@ -40,11 +40,13 @@ Edit `~/.claude/mcp.json` and fill in your credentials:
 |--------|-------------|----------------------|
 | **Trello MCP** | Dispatcher + Coordinator | [Trello Power-Up API key](https://trello.com/power-ups/admin) — set `TRELLO_API_KEY` and `TRELLO_TOKEN` |
 | **Session-bus MCP** | Worker-to-coordinator communication | No credentials — just set the path to `mcp-servers/session-bus/build/index.js` |
+| **tmux-control MCP** | Dispatcher tmux operations | No credentials — just set the path to `mcp-servers/tmux-control/build/index.js` |
 
 ### 3. Build MCP servers
 
 ```bash
 cd ~/.claude/mcp-servers/session-bus && npm install && npm run build
+cd ~/.claude/mcp-servers/tmux-control && npm install && npm run build
 ```
 
 ### 4. Build coordinator daemon (optional)
@@ -236,6 +238,7 @@ The coordinator daemon requires these components:
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | **Session-bus MCP** | `mcp-servers/session-bus/` | Workers publish events here; coordinator reads them |
+| **tmux-control MCP** | `mcp-servers/tmux-control/` | Type-safe tmux operations for the Dispatcher (create sessions, capture panes, detect prompts, launch Claude) |
 | **Trello REST API** | Built into `coordinator/src/trello-client.ts` | Card lookup, move, description updates |
 | **tmux** | System | Worker session management |
 | **git** | System | Worktree and branch management |
@@ -317,6 +320,7 @@ Worker layout: top pane (70%) = Claude Code, bottom pane (30%) = shell for build
 | `coordinator/` | Coordinator daemon (Node.js) |
 | `coordinator/com.coordinator.agent.plist` | launchd plist template |
 | `mcp-servers/session-bus/` | Session-bus MCP server (inter-session messaging) |
+| `mcp-servers/tmux-control/` | tmux-control MCP server (type-safe tmux operations for Dispatcher) |
 | `skills/spawn-worker/` | `/spawn-worker` skill definition |
 | `skills/adhoc/` | `/adhoc` skill definition |
 | `hooks/` | Claude Code hooks (phase completion, pre-compact metrics) |
