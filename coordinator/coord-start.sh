@@ -29,7 +29,7 @@ if [ ! -d "$PROJECT_DIR/.git" ]; then
 fi
 
 PROJECT_NAME="$(basename "$PROJECT_DIR")"
-SESSION_NAME="coord-${PROJECT_NAME,,}"  # lowercase
+SESSION_NAME="coord-$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')"
 
 # --- Check coordinator is built ---
 
