@@ -31,6 +31,61 @@ Use `/spawn-worker` — it handles the full spawn cycle. See `skills/spawn-worke
 
 ---
 
+## Coordinator Workflow
+
+**Triggers:** "coord spawn X", "use coordinator for X", "spawn via coordinator", "start coordinator", "stop coordinator"
+
+The Coordinator daemon is a headless Node.js process that manages workers without an LLM in its poll loop. Use `/coord-spawn` and `/coord-start` skills.
+
+```
+/coord-spawn <card-name-or-url> [--splits N] [--phase N]
+/coord-spawn next                # next P1-Critical from To Do
+/coord-start                     # start daemon (or show status)
+/coord-start --stop              # stop daemon
+```
+
+### Quick Reference (what /coord-spawn does)
+
+1. **Detect worktree** — `git worktree list | head -1`
+2. **Find card** — Trello MCP for `next`, pass name/URL to coordinator otherwise
+3. **Ensure daemon running** — Check PID file, auto-start in `coord-daemon` tmux session if needed
+4. **Submit spawn request** — Write JSON to `~/.claude/coordinator/spawn-requests/`
+5. **Poll for confirmation** — Check `coord status` every 10s (up to 30s)
+6. **iTerm2 tab** — Auto-attach to worker session (if known)
+7. **Report** — Daemon status, request file, attach commands
+
+### When to Use Which
+
+| Scenario | Skill | Why |
+|----------|-------|-----|
+| Single task, quick spawn | `/spawn-worker` | Immediate — no daemon needed |
+| Ad-hoc task, no Trello card | `/adhoc` | Lightweight, no Trello |
+| Multi-worker coordination | `/coord-spawn` | Daemon handles lifecycle, approvals, merges |
+| Persistent background daemon | `/coord-start` | Daemon survives session restarts |
+| Need approval queue + merge queue | `/coord-spawn` | Daemon tracks these automatically |
+
+### Coordinator CLI Reference
+
+All commands use `node ~/.claude/coordinator/build/cli/coord.js` (no `npm link` needed):
+
+```bash
+node ~/.claude/coordinator/build/cli/coord.js status                # Dashboard
+node ~/.claude/coordinator/build/cli/coord.js spawn "<card>"        # Spawn worker
+node ~/.claude/coordinator/build/cli/coord.js list                  # Pending approvals
+node ~/.claude/coordinator/build/cli/coord.js approve [session-id]  # Approve plan/merge
+node ~/.claude/coordinator/build/cli/coord.js reject <id> "reason"  # Reject
+node ~/.claude/coordinator/build/cli/coord.js logs <session-id>     # Event log
+node ~/.claude/coordinator/build/cli/coord.js stop                  # Stop daemon
+```
+
+### Known Limitations
+
+- **Single-project daemon:** PID file is global — one daemon at a time. Running for project A while spawning in project B uses A's worktree.
+- **30s poll delay:** Spawn requests are picked up on the next poll cycle (~30s).
+- **No `coord wip`:** Trello board listing isn't in the coord CLI yet.
+
+---
+
 ## Recursive Worker Model
 
 Every worker session is the same recursive unit. It receives a task and self-evaluates scope:

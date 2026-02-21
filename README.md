@@ -245,6 +245,31 @@ The coordinator daemon requires these components:
 
 The session-bus MCP server must be built and configured in `mcp.json` for workers to publish events. The coordinator reads the session-bus files directly (not via MCP).
 
+### Skills integration
+
+The coordinator can be managed from a Claude Code Dispatcher session using skills:
+
+```
+> /coord-start                     # Start daemon (auto-builds, extracts Trello creds)
+> /coord-start --stop              # Stop daemon and tmux session
+> /coord-spawn "card name"         # Spawn worker via coordinator
+> /coord-spawn next                # Spawn next P1-Critical card
+> /coord-spawn "card" --splits 1   # With custom splits/phase
+```
+
+Natural language also works: "start coordinator", "coord spawn X", "use coordinator for X", "stop coordinator".
+
+The `/coord-spawn` skill auto-starts the daemon if it's not running — no need to run `/coord-start` first.
+
+**When to use which:**
+
+| Scenario | Command | Notes |
+|----------|---------|-------|
+| Single task, quick spawn | `/spawn-worker` | No daemon needed |
+| Ad-hoc task, no Trello | `/adhoc` | Lightweight |
+| Multi-worker coordination | `/coord-spawn` | Daemon handles lifecycle |
+| Persistent daemon | `/coord-start` | Survives session restarts |
+
 ---
 
 ## Worker Model
@@ -323,6 +348,8 @@ Worker layout: top pane (70%) = Claude Code, bottom pane (30%) = shell for build
 | `mcp-servers/tmux-control/` | tmux-control MCP server (type-safe tmux operations for Dispatcher) |
 | `skills/spawn-worker/` | `/spawn-worker` skill definition |
 | `skills/adhoc/` | `/adhoc` skill definition |
+| `skills/coord-spawn/` | `/coord-spawn` skill definition (spawn via coordinator) |
+| `skills/coord-start/` | `/coord-start` skill definition (daemon lifecycle) |
 | `hooks/` | Claude Code hooks (phase completion, pre-compact metrics) |
 | `rules/` | Persistent rules that survive context compression |
 | `plans/` | Implementation plans and research findings |
