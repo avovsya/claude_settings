@@ -362,8 +362,7 @@ Followed by the human-readable summary:
 | Docs updated | <list of updated docs> |
 ```
 
-The YAML front matter enables machine-parseable status for coordinators and automation. For partial completions (leaf worker context exhaustion) use `status: partial`; for blocked tasks use `status: blocked`. See field definitions in `Plans/PLAN_STRUCTURED_COMPLETION_FORMAT.md`.
-
+The YAML front matter enables machine-parseable status for coordinators and automation. For partial completions (leaf worker context exhaustion) use `status: partial`; for blocked tasks use `status: blocked`. 
 ---
 
 ## Task Status

@@ -318,32 +318,6 @@ Follow the **Recursive Worker Model** defined in your global CLAUDE.md.
 At Phase 2 completion, run the Context Capacity Check.
 If this task requires splitting, follow the Self-Replication Protocol.
 
-## Session Bus Integration
-
-Your session ID is: **<session-name>**
-
-You MUST publish events to the session bus at key milestones using the `session_bus_publish` MCP tool. This enables the coordinator to monitor your progress.
-
-**When to publish (mandatory):**
-
-| Event | When | Data |
-|-------|------|------|
-| `session_started` | Immediately on startup | `{}` |
-| `phase_complete` | After completing each phase | `{ "phase": N, "phase_name": "..." }` |
-| `plan_ready` | When plan is ready for review (Phase 3b) | `{ "plan_path": "Plans/PLAN_*.md" }` |
-| `blocked` | When you encounter a blocker | `{ "reason": "..." }` |
-| `build_result` | After build attempts | `{ "passed": true/false, "log_excerpt": "..." }` |
-| `wip_committed` | When you commit a WIP checkpoint | `{ "commit": "<hash>", "phase": N }` |
-| `context_warning` | When context is getting large | `{ "compaction_count": N }` |
-| `split_requested` | When you decide to split | `{ "planned_phases": N, "plan_path": "..." }` |
-
-**Example call:**
-```
-session_bus_publish(session_id="<session-name>", event_type="phase_complete", data={"phase": 1, "phase_name": "Deep Research"})
-```
-
-**First thing you do:** Publish `session_started` event.
-
 ## Permission Model
 
 You are running with `--dangerously-skip-permissions` — all permission checks are bypassed.
@@ -352,7 +326,7 @@ Exercise normal judgment — avoid destructive commands, don't modify files outs
 
 ---
 
-**START NOW: Publish `session_started` event, then begin Phase <start_phase> (<phase-name>). <start-instruction>**
+**START NOW: Begin Phase <start_phase> (<phase-name>). <start-instruction>**
 ````
 
 **Phase name mapping:**

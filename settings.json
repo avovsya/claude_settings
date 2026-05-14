@@ -85,8 +85,6 @@
       "Bash(pnpm *)",
       "Bash(deno *)",
       "mcp__trello__*",
-      "mcp__tmux-control__*",
-      "mcp__session-bus__*",
       "WebSearch",
       "WebFetch(domain:docs.anthropic.com)"
     ],
