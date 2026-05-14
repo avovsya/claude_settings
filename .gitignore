@@ -30,5 +30,8 @@ coordinator/node_modules/
 coordinator/build/
 coordinator/logs/
 coordinator/*.db
+coordinator/*.db-shm
+coordinator/*.db-wal
+coordinator/*.pid
 !CHEATSHEET.md
 !COMPLETION_REPORT.md
