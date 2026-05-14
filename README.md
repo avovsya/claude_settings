@@ -2,11 +2,7 @@
 
 Autonomous worker system for Claude Code. Spawn isolated workers that research, plan, implement, and verify features — while you review plans and test output.
 
-Two management modes:
-- **Dispatcher** (production) — a Claude Code session that manages everything via chat
-- **Coordinator daemon** (experimental) — a headless Node.js daemon with a `coord` CLI
-
-Both use the same worker model: git worktrees, tmux sessions, Phase 1-5 workflow, human approval gates.
+The Dispatcher is a Claude Code session that manages everything via chat: Trello cards, git worktrees, tmux sessions, Phase 1-5 workflow, and human approval gates. Workers can use Claude or the OpenAI Codex CLI.
 
 ---
 
@@ -38,8 +34,8 @@ Edit `~/.claude/mcp.json` and fill in your credentials:
 
 | Server | Required for | How to get credentials |
 |--------|-------------|----------------------|
-| **Trello MCP** | Dispatcher + Coordinator | [Trello Power-Up API key](https://trello.com/power-ups/admin) — set `TRELLO_API_KEY` and `TRELLO_TOKEN` |
-| **Session-bus MCP** | Worker-to-coordinator communication | No credentials — just set the path to `mcp-servers/session-bus/build/index.js` |
+| **Trello MCP** | Dispatcher + Codex worker | [Trello Power-Up API key](https://trello.com/power-ups/admin) — set `TRELLO_API_KEY` and `TRELLO_TOKEN` |
+| **Session-bus MCP** | Inter-session worker events | No credentials — just set the path to `mcp-servers/session-bus/build/index.js` |
 | **tmux-control MCP** | Dispatcher tmux operations | No credentials — just set the path to `mcp-servers/tmux-control/build/index.js` |
 
 ### 3. Build MCP servers
@@ -49,22 +45,12 @@ cd ~/.claude/mcp-servers/session-bus && npm install && npm run build
 cd ~/.claude/mcp-servers/tmux-control && npm install && npm run build
 ```
 
-### 4. Build coordinator daemon (optional)
-
-Only needed if you want to use the `coord` CLI instead of the Dispatcher.
+### 4. Verify
 
 ```bash
-cd ~/.claude/coordinator && npm install && npm run build && npm link
-```
-
-This puts `coord` and `coordinator` on your PATH.
-
-### 5. Verify
-
-```bash
-claude --version          # Claude Code CLI
-tmux -V                   # tmux
-coord status 2>/dev/null  # coordinator (if installed)
+claude --version   # Claude Code CLI
+tmux -V            # tmux
+codex --version    # OpenAI Codex CLI (optional — only needed for /codex-worker)
 ```
 
 ---
@@ -114,6 +100,23 @@ Same as `/spawn-worker` but skips Trello entirely. Good for experiments and quic
 - `--splits N` (default: 0) — how many times the worker can split into sub-workers. 0 = must complete in one session.
 - `--phase N` (default: 1) — which phase to start at. 1=Research, 2=Cross-Cutting, 3=Planning, 4=Implementation, 5=Verification.
 
+### Spawn a Codex worker
+
+```
+> /codex-worker <card-name-or-url>
+> spawn codex for <card-name>
+```
+
+Same worktree + tmux setup as `/spawn-worker` but launches the OpenAI Codex CLI instead of Claude. Requires `codex` on PATH.
+
+### When to use which
+
+| Scenario | Skill | Why |
+|----------|-------|-----|
+| Single task, Claude | `/spawn-worker` | Full Claude session with phase workflow |
+| Ad-hoc task, no Trello card | `/adhoc` | Lightweight, no Trello |
+| Task using OpenAI Codex CLI | `/codex-worker` | Launches `codex` instead of `claude` |
+
 ### Monitor workers
 
 ```
@@ -159,116 +162,6 @@ Finds the worktree, recreates tmux if needed, runs `claude --continue`.
 > i'm bored              # suggests interesting tasks from the backlog
 > curio <topic>           # creates a research card on the Curiosity Lab board
 ```
-
----
-
-## Coordinator Daemon (Experimental)
-
-The coordinator is a headless Node.js daemon that replaces the Dispatcher session. It runs without an LLM in its poll loop — it monitors workers via session-bus events, manages approvals via the `coord` CLI, and handles merges and cleanup.
-
-### How it differs from the Dispatcher
-
-| Aspect | Dispatcher | Coordinator |
-|--------|-----------|-------------|
-| Technology | Claude Code session (LLM) | Node.js daemon (no LLM) |
-| Runs in | Terminal (foreground, interactive) | Background (launchd or manual) |
-| Spawning | `/spawn-worker` in chat | `coord spawn <card-name>` |
-| Monitoring | `wip` in chat | `coord status` |
-| Approvals | "looks good" in the worker tmux | `coord approve [session-id]` |
-| Crash recovery | `claude --continue` | Auto-restart via launchd `KeepAlive` |
-| Trello | Via Trello MCP (built-in) | Via Trello REST API (needs `TRELLO_API_KEY` + `TRELLO_TOKEN` env vars) |
-
-### Start the daemon
-
-```bash
-# Manual (foreground)
-node ~/.claude/coordinator/build/index.js --main-worktree /path/to/your/repo
-
-# Or with env vars for Trello integration
-TRELLO_API_KEY=your-key TRELLO_TOKEN=your-token \
-  node ~/.claude/coordinator/build/index.js --main-worktree ~/.claude
-
-# With logging
-node ~/.claude/coordinator/build/index.js --main-worktree ~/.claude --log-level debug
-```
-
-### Auto-start with launchd
-
-Edit `coordinator/com.coordinator.agent.plist` — replace placeholder paths:
-
-| Placeholder | Replace with |
-|-------------|-------------|
-| `COORDINATOR_BUILD_DIR` | `~/.claude/coordinator/build` (expand `~`) |
-| `MAIN_WORKTREE_PATH` | Your main repo path |
-| `LOG_DIR` | `~/.claude/coordinator/logs` (expand `~`) |
-| `HOME_DIR` | Your home directory |
-
-Then:
-
-```bash
-cp ~/.claude/coordinator/com.coordinator.agent.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.coordinator.agent.plist
-```
-
-### CLI commands
-
-```bash
-coord status                            # Dashboard: workers, approvals, merge queue
-coord list                              # Pending approvals
-coord approve [session-id]              # Approve plan or merge
-coord approve [session-id] --changes "feedback"  # Approve with feedback
-coord reject <session-id> "reason"      # Reject with reason
-coord spawn <card-name>                 # Request worker spawn via Trello
-coord logs <session-id>                 # Session-bus events for a worker
-coord stop                              # Graceful shutdown
-```
-
-### State and data
-
-| Store | Location | Purpose |
-|-------|----------|---------|
-| SQLite DB | `coordinator/coordinator.db` | Worker registry, approvals, merge queue |
-| Session-bus | `~/.claude/session-bus/` | Worker events (file-based pub/sub) |
-| Logs | `coordinator/logs/` | JSON-structured daemon logs |
-
-### Dependencies
-
-The coordinator daemon requires these components:
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| **Session-bus MCP** | `mcp-servers/session-bus/` | Workers publish events here; coordinator reads them |
-| **tmux-control MCP** | `mcp-servers/tmux-control/` | Type-safe tmux operations for the Dispatcher (create sessions, capture panes, detect prompts, launch Claude) |
-| **Trello REST API** | Built into `coordinator/src/trello-client.ts` | Card lookup, move, description updates |
-| **tmux** | System | Worker session management |
-| **git** | System | Worktree and branch management |
-
-The session-bus MCP server must be built and configured in `mcp.json` for workers to publish events. The coordinator reads the session-bus files directly (not via MCP).
-
-### Skills integration
-
-The coordinator can be managed from a Claude Code Dispatcher session using skills:
-
-```
-> /coord-start                     # Start daemon (auto-builds, extracts Trello creds)
-> /coord-start --stop              # Stop daemon and tmux session
-> /coord-spawn "card name"         # Spawn worker via coordinator
-> /coord-spawn next                # Spawn next P1-Critical card
-> /coord-spawn "card" --splits 1   # With custom splits/phase
-```
-
-Natural language also works: "start coordinator", "coord spawn X", "use coordinator for X", "stop coordinator".
-
-The `/coord-spawn` skill auto-starts the daemon if it's not running — no need to run `/coord-start` first.
-
-**When to use which:**
-
-| Scenario | Command | Notes |
-|----------|---------|-------|
-| Single task, quick spawn | `/spawn-worker` | No daemon needed |
-| Ad-hoc task, no Trello | `/adhoc` | Lightweight |
-| Multi-worker coordination | `/coord-spawn` | Daemon handles lifecycle |
-| Persistent daemon | `/coord-start` | Survives session restarts |
 
 ---
 
@@ -342,14 +235,12 @@ Worker layout: top pane (70%) = Claude Code, bottom pane (30%) = shell for build
 | `settings.json` | Global Claude Code settings (permissions, hooks) |
 | `mcp.json` | Active MCP server config (**not committed** — contains secrets) |
 | `mcp.json.template` | MCP config template (committed, secrets redacted) |
-| `coordinator/` | Coordinator daemon (Node.js) |
-| `coordinator/com.coordinator.agent.plist` | launchd plist template |
+| `coordinator/` | Node.js coordinator daemon (archived — not actively used) |
 | `mcp-servers/session-bus/` | Session-bus MCP server (inter-session messaging) |
 | `mcp-servers/tmux-control/` | tmux-control MCP server (type-safe tmux operations for Dispatcher) |
-| `skills/spawn-worker/` | `/spawn-worker` skill definition |
-| `skills/adhoc/` | `/adhoc` skill definition |
-| `skills/coord-spawn/` | `/coord-spawn` skill definition (spawn via coordinator) |
-| `skills/coord-start/` | `/coord-start` skill definition (daemon lifecycle) |
+| `skills/spawn-worker/` | `/spawn-worker` skill — Claude worker for Trello cards |
+| `skills/adhoc/` | `/adhoc` skill — Claude worker without Trello |
+| `skills/codex-worker/` | `/codex-worker` skill — OpenAI Codex CLI worker for Trello cards |
 | `hooks/` | Claude Code hooks (phase completion, pre-compact metrics) |
 | `rules/` | Persistent rules that survive context compression |
 | `plans/` | Implementation plans and research findings |
