@@ -190,10 +190,10 @@ When a worker decides to split:
 - Report: (1) findings, (2) changes made, (3) cross-module impacts
 - Coordinator reviews all output before proceeding
 - Parallel for independent areas; sequential when dependent
-- **Cost efficiency:** Sub-agents don't inherit parent context or share caches — each is an isolated conversation. To reduce redundant token usage:
+- **Quality first:** Sub-agents don't inherit parent context or share caches — each is an isolated conversation. To reduce redundant token usage:
   - Give each agent a focused, non-overlapping file scope (avoid 5 agents all reading the same files)
   - Include shared context excerpts in the Task prompt rather than having each agent independently read the same docs
-  - Use `model: "sonnet"` for Explore/review agents; reserve Opus for coordinator reasoning. **Never use Haiku** — Sonnet is the minimum
+  - **Default to Opus for all agents** (Explore, review, implementation, coordinator). Use Sonnet only for simple, mechanical tasks (e.g., single-file grep, straightforward find-and-report). **Never use Haiku.** Quality of analysis and reasoning matters more than cost/speed
 
 ### Background Agent Usage
 
