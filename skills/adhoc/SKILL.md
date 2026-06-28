@@ -1,6 +1,6 @@
 ---
 name: adhoc
-description: "Spawn a worker session for a quick task without a Trello card. Handles git worktree creation, tmux session setup, worker prompt generation, and Claude launch. Use when: 'adhoc research X', 'adhoc refactor Y', or any request to begin work on a task that doesn't have a Trello card."
+description: "Spawn a worker session for a quick task without a Trello card. Handles git worktree creation, tmux worker-window setup (a window in the project's session), worker prompt generation, and Claude launch. Use when: 'adhoc research X', 'adhoc refactor Y', or any request to begin work on a task that doesn't have a Trello card."
 argument-hint: "<task-description> [--splits N] [--phase N]"
 user-invocable: true
 ---
@@ -117,27 +117,37 @@ If any copy fails, warn the user and ask whether to continue without that submod
 
 ---
 
-## Step 5: Start tmux
+## Step 5: Create Worker Window
 
-Derive session name from branch name (replace `/` with `-`):
+Workers are **windows in the project's single tmux session**, not standalone sessions (one server, one session per project, one window per worker — continuum saves the whole server).
+
+Determine the **project session** (the session the dispatcher is already in — e.g. `Cheeky`), falling back to the project basename if not inside tmux. Derive the worker id/window name from the branch:
 
 ```bash
-SESSION_NAME=$(echo '<branch-name>' | tr '/' '-')
+if [ -n "$TMUX" ]; then
+  PROJECT_SESSION=$(tmux display-message -p -t "${TMUX_PANE:-}" '#S')   # e.g. Cheeky
+else
+  PROJECT_SESSION=$(basename "$MAIN_WORKTREE" | tr ' .' '__')           # tmux dislikes '.'/':' in names
+fi
+WORKER_ID=$(echo '<branch-name>' | tr '/' '-')                          # window name + prompt-file key
 ```
 
-Check for existing session:
+Ensure the project session exists, then check for a window-name collision:
 
 ```bash
-tmux has-session -t "$SESSION_NAME" 2>/dev/null
+tmux has-session -t "$PROJECT_SESSION" 2>/dev/null \
+  || tmux new-session -d -s "$PROJECT_SESSION" -c "$MAIN_WORKTREE"
+
+tmux list-windows -t "$PROJECT_SESSION" -F '#{window_name}' | grep -Fxq "$WORKER_ID"
 ```
 
-If exists, ask user: attach to existing, or kill and recreate?
+If that window already exists, ask the user: attach to it, or kill and recreate (`tmux kill-window -t "$PROJECT_SESSION:$WORKER_ID"`)?
 
-Create session with 2-pane layout:
+Create the worker window (top pane Claude / bottom shell), `-d` so it does not steal focus:
 
 ```bash
-tmux new-session -d -s "$SESSION_NAME" -c "$WORKTREE_PATH"
-tmux split-window -t "$SESSION_NAME" -v -p 30 -c "$WORKTREE_PATH"
+tmux new-window -d -t "$PROJECT_SESSION" -n "$WORKER_ID" -c "$WORKTREE_PATH"
+tmux split-window -t "$PROJECT_SESSION:$WORKER_ID" -v -p 30 -c "$WORKTREE_PATH"
 ```
 
 Pane 1 (top, 70%): Will run Claude Code.
@@ -149,12 +159,12 @@ Pane 2 (bottom, 30%): Shell for manual commands.
 
 ### Generate the prompt file
 
-Write the worker prompt to `/tmp/<session-name>-prompt.md` using the Worker Prompt Template below. Replace all `<placeholders>` with actual values.
+Write the worker prompt to `/tmp/<worker-id>-prompt.md` using the Worker Prompt Template below. Replace all `<placeholders>` with actual values.
 
 ### Validate the prompt
 
 ```bash
-test -s "/tmp/<session-name>-prompt.md"
+test -s "/tmp/<worker-id>-prompt.md"
 ```
 
 If empty or missing, something went wrong — report the error.
@@ -164,33 +174,16 @@ If empty or missing, something went wrong — report the error.
 **Critical:** Must `unset CLAUDECODE` to prevent parent session environment from leaking into the child worker.
 
 ```bash
-tmux send-keys -t "$SESSION_NAME":.1 "unset CLAUDECODE && cat /tmp/<session-name>-prompt.md | claude" Enter
+tmux send-keys -t "$PROJECT_SESSION:$WORKER_ID".1 "unset CLAUDECODE && cat /tmp/<worker-id>-prompt.md | claude" Enter
 ```
+
+(`.1` targets the top pane — `pane-base-index` is 1 in this tmux config.)
 
 ---
 
-## Step 7: Open iTerm2 Tab
+## Step 7: Report
 
-```bash
-osascript <<'APPLESCRIPT'
-tell application "iTerm2"
-    tell current window
-        create tab with default profile
-        tell current session
-            write text "tmux attach -t <session-name>"
-        end tell
-    end tell
-end tell
-APPLESCRIPT
-```
-
-If iTerm2 is not running or the osascript fails, skip this step silently. The user can always attach manually.
-
----
-
-## Step 8: Report
-
-Output a summary:
+No iTerm2 tab is opened (the worker is a window in the already-attached project session — just switch to it). Output a summary:
 
 ```
 Ad-hoc worker spawned for: <task-description>
@@ -198,16 +191,17 @@ Ad-hoc worker spawned for: <task-description>
   Branch:   <branch-name>
   Splits:   <remaining_splits>, Phase: <start_phase>
 
-  Attach: tmux attach -t <session-name>
-  Panes:  Top = Claude Code | Bottom = shell
-          Ctrl-b up/down to switch | Ctrl-b d to detach
+  Session: <project-session>   Window: <worker-id>
+  Reach it:  C-a C-l / C-a C-h  (cycle worker windows in the current session)
+  Or attach: tmux attach -t <project-session> \; select-window -t <worker-id>
+  Panes:     Top = Claude Code | Bottom = shell  (C-a h/j/k/l to move; C-a d to detach)
 ```
 
 ---
 
 ## Worker Prompt Template
 
-This is the exact content written to `/tmp/<session-name>-prompt.md`. Replace all `<placeholders>` with actual values from the steps above.
+This is the exact content written to `/tmp/<worker-id>-prompt.md`. Replace all `<placeholders>` with actual values from the steps above.
 
 ````markdown
 ## Task: <task-description>
@@ -223,7 +217,7 @@ This is the exact content written to `/tmp/<session-name>-prompt.md`. Replace al
 
 ## Worker Configuration
 
-session_id: <session-name>
+session_id: <worker-id>
 remaining_splits: <remaining_splits>
 start_phase: <start_phase>
 

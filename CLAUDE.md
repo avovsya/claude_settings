@@ -24,10 +24,9 @@ Use `/spawn-worker` — it handles the full spawn cycle. See `skills/spawn-worke
 3. **Branch + worktree** — `<type>/<kebab-title>`, `git worktree add`
 4. **Submodules** — Auto-detect from `.gitmodules`, copy from main worktree
 5. **Trello** — Move to "Implementing" (or "Researching" for Curiosity Lab), append metadata
-6. **tmux** — 2-pane (70% Claude / 30% shell)
-7. **Worker prompt** — Write to `/tmp/<session>-prompt.md`, launch with `unset CLAUDECODE && cat | claude`
-8. **iTerm2 tab** — Auto-attach (graceful fallback)
-9. **Report** — Worktree path, branch, attach command
+6. **tmux** — worker **window** (named `<worker-id>`) in the project's session (`#S`, e.g. `Cheeky`), 2-pane (70% Claude / 30% shell). NOT a standalone session.
+7. **Worker prompt** — Write to `/tmp/<worker-id>-prompt.md`, launch with `unset CLAUDECODE && cat | claude`
+8. **Report** — Worktree path, branch, window name, attach command (no iTerm2 tab — switch windows with `C-a C-l`/`C-a C-h`)
 
 ---
 
@@ -137,7 +136,7 @@ When a worker decides to split:
    - `start_phase: {N}` and `remaining_splits: {current - 1}`
 5. **SIGNAL** human: "Task too large for one context. N phase prompts ready. Approve?"
 6. **WAIT** for human approval
-7. **SPAWN** children via tmux: `unset CLAUDECODE && cat /tmp/phase-N-prompt.md | claude --dangerously-skip-permissions`
+7. **SPAWN** children as **windows in the project session** (not new sessions). For each child: `tmux new-window -d -t "$PROJECT_SESSION" -n "phase-N" -c "$WORKTREE_PATH"`, then `tmux send-keys -t "$PROJECT_SESSION:phase-N".1 "unset CLAUDECODE && cat /tmp/phase-N-prompt.md | claude --dangerously-skip-permissions" Enter` (`PROJECT_SESSION` = `tmux display-message -p -t "$TMUX_PANE" '#S'`)
 8. **BECOME** Coordinator -- no more implementation code, just reads children's output, writes next prompts
 
 ### Agent Roles (within any worker)
@@ -325,7 +324,7 @@ git merge <feature-branch> --no-ff -m "Merge <branch-name>: <description>"
 ```bash
 git worktree remove /path/to/feature/worktree
 git branch -d <branch-name>
-tmux kill-session -t <session-name>
+tmux kill-window -t <project-session>:<worker-id>   # worker is a window, not a session
 ```
 
 **Step 7:** Write `COMPLETION_REPORT.md` in the worktree root with YAML front matter followed by a human-readable report:
@@ -370,7 +369,7 @@ The YAML front matter enables machine-parseable status for coordinators and auto
 **Triggers:** "wip", "task status", "what am I working on"
 
 1. **Gather** from all active worktrees:
-   - Trello "Implementing" cards, active tmux sessions (`tmux list-sessions`)
+   - Trello "Implementing" cards, active worker windows (`tmux list-windows -a -F '#{session_name}:#{window_name}'` — one window per worker)
    - `Plans/PLAN_*.md` files, P1/P2 from "To Do"
    - Per worktree: last commit time (`git log -1 --format="%ct"`), build logs, phase signals, compaction metrics
 
@@ -385,7 +384,7 @@ The YAML front matter enables machine-parseable status for coordinators and auto
    - **Last Activity:** Relative time since last commit (`git log -1 --format="%cr"`). Mark **(STALE)** if 2+ hours
    - **Health:** Compaction count from `~/.claude/compaction-metrics.jsonl` (entries matching worktree cwd, last 24h). — if unavailable
 
-3. **Stale tasks:** "Implementing" cards where BOTH: no commits in 2+ hours AND no active tmux session → suggest cleanup or resume
+3. **Stale tasks:** "Implementing" cards where BOTH: no commits in 2+ hours AND no active tmux window → suggest cleanup or resume
 
 4. **High priority backlog:** P1-Critical + P2-High from "To Do"
 
@@ -417,28 +416,21 @@ PROJECT_DIR=$(echo "$WORKTREE_PATH" | sed 's|/|-|g' | sed 's|^-||')
 ls ~/.claude/projects/${PROJECT_DIR}/*.jsonl 2>/dev/null
 ```
 
-**Step 3:** Check tmux: `tmux list-sessions | grep -i "<task-name>"`
+**Step 3:** Check tmux: `tmux list-windows -a -F '#{session_name}:#{window_name}' | grep -i "<task-name>"` (workers are windows now). Resolve the project session: `PROJECT_SESSION=$(tmux display-message -p -t "${TMUX_PANE:-}" '#S' 2>/dev/null || basename "$MAIN_WORKTREE" | tr ' .' '__')`; `WORKER_ID="<task-name>"` (branch with `/`→`-`).
 
-**Step 4a:** tmux exists, Claude not running -> attach + `claude --continue`
+**Step 4a:** Worker window exists, Claude not running -> select it (`tmux select-window -t "$PROJECT_SESSION:$WORKER_ID"`) and run `claude --continue` in its top pane.
 
-**Step 4b:** No tmux session:
+**Step 4b:** No worker window:
 ```bash
-tmux new-session -d -s <session-name> -c "$WORKTREE_PATH"
-tmux split-window -t <session-name> -v -p 30 -c "$WORKTREE_PATH"
-tmux send-keys -t <session-name>:.1 "unset CLAUDECODE && claude --continue" Enter
-osascript <<EOF
-tell application "iTerm2"
-    tell current window
-        create tab with default profile
-        tell current session
-            write text "tmux attach -t <session-name>"
-        end tell
-    end tell
-end tell
-EOF
+tmux has-session -t "$PROJECT_SESSION" 2>/dev/null \
+  || tmux new-session -d -s "$PROJECT_SESSION" -c "$MAIN_WORKTREE"
+tmux new-window -d -t "$PROJECT_SESSION" -n "$WORKER_ID" -c "$WORKTREE_PATH"
+tmux split-window -t "$PROJECT_SESSION:$WORKER_ID" -v -p 30 -c "$WORKTREE_PATH"
+tmux send-keys -t "$PROJECT_SESSION:$WORKER_ID".1 "unset CLAUDECODE && claude --continue" Enter
 ```
+(No iTerm2 tab — attach with `tmux attach -t "$PROJECT_SESSION" \; select-window -t "$WORKER_ID"`, or `C-a C-l`/`C-a C-h` if already attached.)
 
-**Step 5:** Report: worktree found, session found, tmux recreated, Claude resumed
+**Step 5:** Report: worktree found, session found, worker window recreated, Claude resumed
 
 **Notes:** `claude --continue` = most recent session in cwd. `claude --resume <id>` = specific session. Multiple sessions -> use `claude --resume` with picker.
 

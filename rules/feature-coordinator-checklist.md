@@ -20,7 +20,7 @@ Persistent reminder for long-running feature sessions. Context compression may d
 **Leaf workers (remaining_splits == 0):**
 - MUST complete in one context -- no splitting allowed
 - If context exhausted: commit WIP, write COMPLETION_REPORT.md with `status: partial` (structured YAML front matter), STOP
-- Do NOT spawn child workers or tmux sessions
+- Do NOT spawn child workers or tmux worker windows
 
 **Before committing (Finish Task):**
 - Verify build passes

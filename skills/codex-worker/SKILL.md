@@ -52,7 +52,14 @@ PROJECT=$(basename "$MAIN_WORKTREE")
 
 branch="<type>/<kebab-card-title>"          # e.g. fix/scene-switch-skip
 worktree="${PARENT_DIR}/${PROJECT}-<kebab>"  # e.g. ../Morph-fix-scene-switch-skip
-session="<kebab-card-title>"                 # tmux session name
+window="<kebab-card-title>"                  # tmux WINDOW name (worker id)
+
+# Project session = the session the dispatcher is in (Cheeky/Morph/...), else project basename
+if [ -n "$TMUX" ]; then
+  project_session="$(tmux display-message -p -t "${TMUX_PANE:-}" '#S')"
+else
+  project_session="$(basename "$MAIN_WORKTREE" | tr ' .' '__')"
+fi
 
 git worktree add -b "$branch" "$worktree" main
 ```
@@ -63,10 +70,10 @@ Copy submodules if `.gitmodules` exists (same as spawn-worker).
 
 ## Step 5: Write Prompt File
 
-Write task prompt to `/tmp/<session>-codex-prompt.md`. Use a single-quoted heredoc to avoid shell interpolation of backticks:
+Write task prompt to `/tmp/<window>-codex-prompt.md`. Use a single-quoted heredoc to avoid shell interpolation of backticks:
 
 ```bash
-cat > /tmp/${session}-codex-prompt.md <<'PROMPT'
+cat > /tmp/${window}-codex-prompt.md <<'PROMPT'
 ## Task
 
 <card title and URL>
@@ -101,27 +108,32 @@ PROMPT
 
 ---
 
-## Step 6: Create tmux Session
+## Step 6: Create Worker Window
+
+Workers are **windows in the project's single tmux session** (one server, one session per project, one window per worker — continuum saves the whole server). Ensure the project session exists, then add the worker window:
 
 ```bash
-tmux new-session -d -s "$session" -c "$worktree"
-tmux split-window -t "$session" -v -p 30 -c "$worktree"
+tmux has-session -t "$project_session" 2>/dev/null \
+  || tmux new-session -d -s "$project_session" -c "$MAIN_WORKTREE"
+
+tmux new-window -d -t "$project_session" -n "$window" -c "$worktree"
+tmux split-window -t "$project_session:$window" -v -p 30 -c "$worktree"
 ```
 
-Top pane (70%): Codex. Bottom pane (30%): shell.
+Top pane (70%): Codex. Bottom pane (30%): shell. `-d` so it does not steal focus from the dispatcher.
 
 ---
 
 ## Step 7: Launch Codex
 
-Find the top pane by `pane_top` value (do NOT assume window/pane index 0):
+Find the top pane of the worker window by `pane_top` value (do NOT assume pane index 0):
 
 ```bash
-top_pane="$(tmux list-panes -t "$session" -F '#{pane_id} #{pane_top}' \
+top_pane="$(tmux list-panes -t "$project_session:$window" -F '#{pane_id} #{pane_top}' \
   | sort -k2,2n | awk 'NR==1{print $1}')"
 
 tmux send-keys -t "$top_pane" \
-  "cd '$worktree' && codex \"Read /tmp/${session}-codex-prompt.md and execute it.\"" \
+  "cd '$worktree' && codex \"Read /tmp/${window}-codex-prompt.md and execute it.\"" \
   Enter
 ```
 
@@ -133,8 +145,8 @@ tmux send-keys -t "$top_pane" \
 - Post comment (use `printf` for multiline, then `--data-urlencode`):
 
 ```bash
-text="$(printf 'Codex worker session started.\n- Branch: %s\n- Worktree: %s\n- Session: %s\n- Prompt: /tmp/%s-codex-prompt.md\n- Attach: tmux attach -t %s' \
-  "$branch" "$worktree" "$session" "$session" "$session")"
+text="$(printf 'Codex worker started.\n- Branch: %s\n- Worktree: %s\n- Session/Window: %s:%s\n- Prompt: /tmp/%s-codex-prompt.md\n- Attach: tmux attach -t %s \\; select-window -t %s' \
+  "$branch" "$worktree" "$project_session" "$window" "$window" "$project_session" "$window")"
 
 curl -sS --fail -X POST \
   "https://api.trello.com/1/cards/${card_id}/actions/comments" \
@@ -145,34 +157,18 @@ curl -sS --fail -X POST \
 
 ---
 
-## Step 9: Attach iTerm2 Tab
+## Step 9: Report
 
-```bash
-osascript <<EOF
-tell application "iTerm2"
-  tell current window
-    create tab with default profile
-    tell current session
-      write text "tmux attach -t $session"
-    end tell
-  end tell
-end tell
-EOF
-```
-
-Graceful fallback: if iTerm2 not available or fails, just report the attach command.
-
----
-
-## Step 10: Report
+No iTerm2 tab is opened (the worker is a window in the already-attached project session — just switch to it).
 
 ```
 Card:     <title> — <url>
 Branch:   <branch>
 Worktree: <worktree>
-Session:  <session>
-Prompt:   /tmp/<session>-codex-prompt.md
-Attach:   tmux attach -t <session>
+Session:  <project_session>   Window: <window>
+Prompt:   /tmp/<window>-codex-prompt.md
+Reach it: C-a C-l / C-a C-h   (cycle worker windows)
+Attach:   tmux attach -t <project_session> \; select-window -t <window>
 Trello:   → Implementing
 ```
 
